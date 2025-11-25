@@ -67,7 +67,7 @@ const Router = createBrowserRouter([
     },
     {
         path: '/dispatcher',
-        element: <DashboardLayout sidebar={<DispatcherSidebar />} />,
+        element: <DashboardLayout sidebar={<DispatcherSidebar/>} />,
         children: [
             {
                 path: 'overview',

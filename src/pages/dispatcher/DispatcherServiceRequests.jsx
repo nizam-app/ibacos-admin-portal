@@ -161,7 +161,7 @@ const DispatcherServiceRequests = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [selectedSR, setSelectedSR] = useState(null);
 
-  const itemsPerPage = 10;
+  const itemsPerPage = 5;
 
   // reset page when filters change
   useEffect(() => {
@@ -239,11 +239,11 @@ const DispatcherServiceRequests = () => {
               value={filterCategory}
               onChange={(e) => setFilterCategory(e.target.value)}
             >
-              <option value="all">All Categories</option>
-              <option value="Electrical">Electrical</option>
-              <option value="Plumbing">Plumbing</option>
-              <option value="HVAC">HVAC</option>
-              <option value="General">General</option>
+              <option className="" value="all">All Categories</option>
+              <option className="" value="Electrical">Electrical</option>
+              <option className="" value="Plumbing">Plumbing</option>
+              <option className="" value="HVAC">HVAC</option>
+              <option className="" value="General">General</option>
             </select>
 
             {/* Status filter */}

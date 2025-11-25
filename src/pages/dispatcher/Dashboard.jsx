@@ -116,7 +116,8 @@ const technicianSummary = [
 ];
 
 // Small reusable card for top stats
-function StatCard({ title, value, helper, icon: Icon }) {
+function StatCard({item}) {
+  const { title, value, helper, icon: Icon } = item
   return (
     <div className="flex flex-col rounded-xl border border-gray-200 bg-white px-6 py-5 shadow-sm">
       <div className="flex items-center justify-between">
@@ -149,7 +150,7 @@ const DispatcherDashboard = () => {
       {/* Top stats */}
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-4 md:grid-cols-2">
         {stats.map((item) => (
-          <StatCard key={item.id} {...item} icon={item.icon} />
+          <StatCard key={item.id} item={item} />
         ))}
       </div>
 
