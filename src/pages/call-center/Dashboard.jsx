@@ -1,4 +1,7 @@
 // src/pages/call-center/Dashboard.jsx
+
+import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   FileText,
   Clock3,
@@ -7,46 +10,148 @@ import {
   BarChart3,
   Timer,
 } from "lucide-react";
+import axiosClient from "../../api/axiosClient";
 
-const CallCenterDashboard = () => {
-  // ---- Mock Data ----
+const Dashboard = () => {
+  const navigate = useNavigate();
+
+  const [summary, setSummary] = useState({
+    total: 0,
+    pending: 0,
+    inProgress: 0,
+    resolved: 0,
+    openToday: 0,
+  });
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  // ---- API: /sr ----
+  useEffect(() => {
+    const fetchSRs = async () => {
+      try {
+        setLoading(true);
+        setError("");
+
+        const res = await axiosClient.get("/sr");
+        const data = res.data || []; // API theke asha SR array
+
+        const total = data.length;
+
+        // 👉 ei mapping ta pore backend final logic onujayi change korte parba
+        const pendingStatuses = ["NEW", "OPEN", "PENDING"];
+        const inProgressStatuses = [
+          "CONVERTED_TO_WO",
+          "IN_PROGRESS",
+          "ASSIGNED",
+          "UNASSIGNED",
+        ];
+        const resolvedStatuses = [
+          "RESOLVED",
+          "COMPLETED",
+          "COMPLETED_PAID",
+          "COMPLETED_PENDING_PAYMENT",
+        ];
+
+        let pending = 0;
+        let inProgress = 0;
+        let resolved = 0;
+        let openToday = 0;
+
+        const todayStr = new Date().toDateString();
+
+        data.forEach((sr) => {
+          const srStatus = sr.status;
+          const woStatus = sr.woStatus;
+
+          // Pending = NEW / OPEN / PENDING
+          if (pendingStatuses.includes(srStatus)) {
+            pending += 1;
+          }
+
+          // In progress = woStatus ba srStatus jokhon kaj cholche
+          if (
+            inProgressStatuses.includes(woStatus) ||
+            inProgressStatuses.includes(srStatus)
+          ) {
+            inProgress += 1;
+          }
+
+          // Resolved = SR/WO completed types
+          if (
+            resolvedStatuses.includes(woStatus) ||
+            resolvedStatuses.includes(srStatus)
+          ) {
+            resolved += 1;
+          }
+
+          // Aajker open SR (cancelled / resolved chara)
+          const createdDate = new Date(sr.createdAt);
+          const isToday = createdDate.toDateString() === todayStr;
+          const isOpen = !["CANCELLED", "RESOLVED"].includes(srStatus);
+          if (isToday && isOpen) {
+            openToday += 1;
+          }
+        });
+
+        setSummary({
+          total,
+          pending,
+          inProgress,
+          resolved,
+          openToday,
+        });
+      } catch (err) {
+        console.error(err);
+        setError(
+          err?.response?.data?.message || "Failed to load dashboard data."
+        );
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchSRs();
+  }, []);
+
+  // ---- Cards config (values now come from API) ----
   const summaryCards = [
     {
       title: "Total Service Requests",
-      value: 12,
+      value: summary.total,
       subtitle: "All time SRs",
-      valueClass: "text-[#c20001]", // red
+      valueClass: "text-[#c20001]",
       Icon: FileText,
       iconColor: "text-[#c20001]",
     },
     {
       title: "Pending",
-      value: 6,
+      value: summary.pending,
       subtitle: "Awaiting action",
-      valueClass: "text-[#ffb111]", // yellow
+      valueClass: "text-[#ffb111]",
       Icon: Clock3,
       iconColor: "text-[#ffb111]",
     },
     {
       title: "In Progress",
-      value: 4,
+      value: summary.inProgress,
       subtitle: "Being worked on",
-      valueClass: "text-[#f97316]", // orange
+      valueClass: "text-[#f97316]",
       Icon: AlertTriangle,
       iconColor: "text-[#f97316]",
     },
     {
       title: "Resolved",
-      value: 2,
+      value: summary.resolved,
       subtitle: "Completed SRs",
-      valueClass: "text-[#16a34a]", // green
+      valueClass: "text-[#16a34a]",
       Icon: CheckCircle2,
       iconColor: "text-[#16a34a]",
     },
   ];
 
   const todayStats = {
-    openToday: 2,
+    openToday: summary.openToday,
+    // Backend jokhon avg dispatch time dibe, ekhane replace korbe
     avgDispatchTime: "1.2 hrs",
   };
 
@@ -61,9 +166,23 @@ const CallCenterDashboard = () => {
           <p className="text-sm text-gray-500 mt-1">
             Welcome to ServioPro Call Center Portal
           </p>
+
+          {loading && (
+            <p className="mt-2 text-xs text-gray-400">
+              Loading latest service requests...
+            </p>
+          )}
+          {error && (
+            <p className="mt-2 text-xs text-red-500">
+              {error}
+            </p>
+          )}
         </div>
 
-        <button className="inline-flex items-center gap-2 rounded-lg bg-[#c20001] px-5 py-2 text-sm font-semibold text-white shadow-sm hover:bg-[#a80000]">
+        <button
+          onClick={() => navigate("/call-center/create-sr")}
+          className="inline-flex items-center gap-2 rounded-lg bg-[#c20001] px-5 py-2 text-sm font-semibold text-white shadow-sm hover:bg-[#a80000]"
+        >
           <span className="text-lg">＋</span>
           <span>Create SR</span>
         </button>
@@ -84,8 +203,12 @@ const CallCenterDashboard = () => {
                 <Icon className={`h-4 w-4 ${card.iconColor}`} />
               </div>
             </div>
-            <p className={`text-2xl font-semibold mb-1 ${card.valueClass}`}>
-              {card.value}
+            <p
+              className={`text-2xl font-semibold mb-1 ${
+                card.valueClass
+              } ${loading ? "opacity-60" : ""}`}
+            >
+              {loading ? "—" : card.value}
             </p>
             <p className="text-sm text-gray-500">{card.subtitle}</p>
           </div>
@@ -99,7 +222,7 @@ const CallCenterDashboard = () => {
           <span className="text-gray-600">
             Open SRs Today:
             <span className="ml-1 font-semibold text-[#c20001]">
-              {todayStats.openToday}
+              {loading ? "—" : todayStats.openToday}
             </span>
           </span>
         </div>
@@ -118,4 +241,4 @@ const CallCenterDashboard = () => {
   );
 };
 
-export default CallCenterDashboard;
+export default Dashboard;
