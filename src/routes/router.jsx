@@ -19,6 +19,7 @@ import DispatcherWorkOrdersPage from "../pages/dispatcher/DispatcherWorkOrdersPa
 import AdminDashboard from "../pages/administrator/Dashboard";
 
 import ProtectedRoute from "./ProtectedRoute";
+import TechnicianMapView from "../pages/dispatcher/TechnicianMapView";
 
 const Router = createBrowserRouter([
   {
@@ -61,6 +62,7 @@ const Router = createBrowserRouter([
     ),
     children: [
       { path: "overview", element: <DispatcherDashboard /> },
+      { path: "technician-map", element: <TechnicianMapView /> },
       { path: "service-requests", element: <DispatcherServiceRequests /> },
       { path: "work-orders", element: <DispatcherWorkOrdersPage /> },
       { path: "payments", element: <h3>payment coming soon.....</h3> },

@@ -1,3 +1,4 @@
+// src/pages/call-center/ServiceRequestForm.jsx
 import { useState, useEffect } from "react";
 import {
   CheckCircle2,
@@ -11,38 +12,15 @@ import {
   Map,
 } from "lucide-react";
 
-const CATEGORY_SUBSERVICES = {
-  Electrical: [
-    "Wiring Repair",
-    "Panel Upgrade",
-    "Outlet Installation",
-    "Lighting Fixtures",
-    "Circuit Breaker",
-  ],
-  Plumbing: [
-    "Leak Repair",
-    "Drain Cleaning",
-    "Pipe Installation",
-    "Water Heater",
-    "Fixture Replacement",
-  ],
-  HVAC: [
-    "AC Repair",
-    "Heating Repair",
-    "Maintenance",
-    "Installation",
-    "Duct Cleaning",
-  ],
-  General: [
-    "Home Inspection",
-    "Maintenance",
-    "Consultation",
-    "Emergency Service",
-    "Other",
-  ],
-};
+import axiosClient from "../../api/axiosClient";
+import {
+  fetchCategories,
+  fetchSubservices,
+  fetchServices,
+} from "../../api/serviceMetaApi";
+import LocationPickerMap from "../../components/map/LocationPickerMap";
 
-function ServiceRequestForm({ onSubmit, customers = [] }) {
+function ServiceRequestForm() {
   const [formData, setFormData] = useState({
     customerName: "",
     phone: "",
@@ -53,121 +31,222 @@ function ServiceRequestForm({ onSubmit, customers = [] }) {
     latitude: 40.4406,
     longitude: -79.9959,
     customerNotes: "",
-    category: "",
-    subservice: "",
+    categoryId: "",
+    subserviceId: "",
+    serviceId: "",
     description: "",
     priority: "",
     attachments: [],
   });
 
+  // ---- customer & state ----
   const [foundCustomer, setFoundCustomer] = useState(null);
-  const [previousSRCount, setPreviousSRCount] = useState(0);
   const [useSavedAddress, setUseSavedAddress] = useState(true);
   const [saveAsDefaultAddress, setSaveAsDefaultAddress] = useState(false);
   const [showNewCustomerForm, setShowNewCustomerForm] = useState(false);
   const [pinPlaced, setPinPlaced] = useState(true);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [searchError, setSearchError] = useState("");
 
-  // phone normalize
+  // ---- meta: category / subservice / service ----
+  const [categories, setCategories] = useState([]);
+  const [subservices, setSubservices] = useState([]);
+  const [services, setServices] = useState([]);
+  const [metaError, setMetaError] = useState("");
+
+  // ---- submit status ----
+  const [submitting, setSubmitting] = useState(false);
+  const [globalError, setGlobalError] = useState("");
+  const [successMessage, setSuccessMessage] = useState("");
+
+  // helper
   const normalizePhone = (phone) => phone.replace(/\D/g, "");
 
-  // phone lookup
+  const buildFullAddress = (data) => {
+    const parts = [data.address, data.city, data.landmark]
+      .map((x) => x && x.trim())
+      .filter(Boolean);
+    return parts.join(", ");
+  };
+
+  // =========================
+  //   LOAD META DATA
+  // =========================
   useEffect(() => {
-    if (formData.phone.length >= 10) {
-      const normalized = normalizePhone(formData.phone);
-      const customer = customers.find(
-        (c) => normalizePhone(c.phone || "") === normalized
-      );
-
-      if (customer) {
-        setFoundCustomer(customer);
-        setShowNewCustomerForm(false);
-        setUseSavedAddress(true);
-        setSaveAsDefaultAddress(false);
-        setPreviousSRCount(Math.floor(Math.random() * 9));
-
-        setFormData((prev) => ({
-          ...prev,
-          address: customer.address.split(",")[0].trim() || "",
-          city: customer.address.split(",").slice(1).join(",").trim() || "",
-          latitude: 40.4406 + (Math.random() - 0.5) * 0.02,
-          longitude: -79.9959 + (Math.random() - 0.5) * 0.02,
-        }));
-        setPinPlaced(true);
-      } else {
-        setFoundCustomer(null);
-        setShowNewCustomerForm(true);
-        setUseSavedAddress(false);
-        setSaveAsDefaultAddress(true);
-        setPinPlaced(false);
+    const loadCategories = async () => {
+      try {
+        const { data } = await fetchCategories();
+        setCategories(data || []);
+      } catch (err) {
+        console.error("Failed to load categories", err);
+        setMetaError("Failed to load categories.");
       }
-    } else {
-      setFoundCustomer(null);
-      setShowNewCustomerForm(false);
-    }
-  }, [formData.phone, customers]);
+    };
 
-  // reset subservice when category changes
+    loadCategories();
+  }, []);
+
+  // category change → load subservices
   useEffect(() => {
-    setFormData((prev) => ({ ...prev, subservice: "" }));
-  }, [formData.category]);
-
-  const handleSubmit = (e) => {
-    e.preventDefault();
-
-    if (!pinPlaced) {
-      alert("Please place the pin on the map to set the job location.");
+    if (!formData.categoryId) {
+      setSubservices([]);
+      setServices([]);
+      setFormData((prev) => ({
+        ...prev,
+        subserviceId: "",
+        serviceId: "",
+      }));
       return;
     }
 
-    if (foundCustomer) {
-      const dataToSubmit = {
-        ...formData,
-        customerName: foundCustomer.name,
-        email: foundCustomer.email,
-        address: foundCustomer.address,
-      };
-      onSubmit && onSubmit(dataToSubmit, foundCustomer.id);
-    } else {
-      onSubmit && onSubmit(formData, undefined);
+    const loadSubservices = async () => {
+      try {
+        const { data } = await fetchSubservices(formData.categoryId);
+        setSubservices(data || []);
+      } catch (err) {
+        console.error("Failed to load subservices", err);
+        setMetaError("Failed to load subservices.");
+      }
+    };
+
+    loadSubservices();
+  }, [formData.categoryId]);
+
+  // subservice change → load services
+  useEffect(() => {
+    if (!formData.subserviceId) {
+      setServices([]);
+      setFormData((prev) => ({ ...prev, serviceId: "" }));
+      return;
     }
 
-    resetForm();
-  };
+    const loadServices = async () => {
+      try {
+        const { data } = await fetchServices(formData.subserviceId);
+        setServices(data || []);
+      } catch (err) {
+        console.error("Failed to load services", err);
+        setMetaError("Failed to load services.");
+      }
+    };
 
-  const resetForm = () => {
-    setFormData({
-      customerName: "",
-      phone: "",
-      email: "",
-      address: "",
-      city: "",
-      landmark: "",
-      latitude: 40.4406,
-      longitude: -79.9959,
-      customerNotes: "",
-      category: "",
-      subservice: "",
-      description: "",
-      priority: "",
-      attachments: [],
-    });
-    setFoundCustomer(null);
-    setUseSavedAddress(true);
-    setSaveAsDefaultAddress(false);
-    setShowNewCustomerForm(false);
-    setPinPlaced(true);
-  };
+    loadServices();
+  }, [formData.subserviceId]);
 
-  const handleUseCustomer = () => {
+  // =========================
+  //   PHONE → SEARCH CUSTOMER
+  // =========================
+  useEffect(() => {
+    const raw = formData.phone;
+    const normalized = normalizePhone(raw);
+
+    if (!normalized || normalized.length < 10) {
+      setFoundCustomer(null);
+      setShowNewCustomerForm(false);
+      setUseSavedAddress(true);
+      setSaveAsDefaultAddress(false);
+      setSearchError("");
+      return;
+    }
+
+    let cancelled = false;
+
+    const runSearch = async () => {
+      setSearchLoading(true);
+      setSearchError("");
+      try {
+        const { data } = await axiosClient.get("/sr/search-customer", {
+          params: { phone: normalized },
+        });
+
+        if (cancelled) return;
+
+        if (data.exists && data.customer) {
+          const c = data.customer;
+
+          // split homeAddress → street + city (optional)
+          const homeAddress = c.homeAddress || "";
+          const parts = homeAddress.split(",");
+          const street = parts[0]?.trim() || "";
+          const city = parts.slice(1).join(",").trim() || "";
+
+          setFoundCustomer(c);
+          setShowNewCustomerForm(false);
+          setUseSavedAddress(true);
+          setSaveAsDefaultAddress(false);
+
+          setFormData((prev) => ({
+            ...prev,
+            customerName: c.name || "",
+            address: street || prev.address,
+            city: city || prev.city,
+            latitude: c.latitude ?? prev.latitude,
+            longitude: c.longitude ?? prev.longitude,
+          }));
+          setPinPlaced(true);
+        } else {
+          // new customer
+          setFoundCustomer(null);
+          setShowNewCustomerForm(true);
+          setUseSavedAddress(false);
+          setSaveAsDefaultAddress(true);
+          setPinPlaced(false);
+        }
+      } catch (err) {
+        console.error("Customer search failed", err);
+        if (!cancelled) {
+          setSearchError(
+            err.response?.data?.message || "Customer search failed.",
+          );
+        }
+      } finally {
+        !cancelled && setSearchLoading(false);
+      }
+    };
+
+    runSearch();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [formData.phone]);
+
+  // =========================
+  //   MAP: use saved address
+  // =========================
+  const toggleUseSavedAddress = () => {
     if (!foundCustomer) return;
-    setFormData((prev) => ({
-      ...prev,
-      customerName: foundCustomer.name,
-      email: foundCustomer.email,
-      address: foundCustomer.address,
-    }));
+
+    setUseSavedAddress((prev) => {
+      const next = !prev;
+
+      if (next) {
+        // back to saved address
+        const homeAddress = foundCustomer.homeAddress || "";
+        const parts = homeAddress.split(",");
+        const street = parts[0]?.trim() || "";
+        const city = parts.slice(1).join(",").trim() || "";
+
+        setFormData((fd) => ({
+          ...fd,
+          address: street,
+          city,
+          latitude: foundCustomer.latitude ?? fd.latitude,
+          longitude: foundCustomer.longitude ?? fd.longitude,
+        }));
+        setPinPlaced(true);
+      } else {
+        // editable now – require pin
+        setPinPlaced(false);
+      }
+
+      return next;
+    });
   };
 
+  // =========================
+  //   FILE HANDLERS (UI only)
+  // =========================
   const handleFileChange = (e) => {
     if (!e.target.files) return;
     const newFiles = Array.from(e.target.files);
@@ -183,31 +262,123 @@ function ServiceRequestForm({ onSubmit, customers = [] }) {
     setFormData((prev) => ({ ...prev, attachments: updated }));
   };
 
-  const availableSubservices = formData.category
-    ? CATEGORY_SUBSERVICES[formData.category] || []
-    : [];
-
-  const toggleUseSavedAddress = () => {
-    if (!foundCustomer) return;
-    setUseSavedAddress((prev) => {
-      const next = !prev;
-      if (next) {
-        // back to saved address
-        setFormData((fd) => ({
-          ...fd,
-          address: foundCustomer.address.split(",")[0].trim() || "",
-          city:
-            foundCustomer.address.split(",").slice(1).join(",").trim() || "",
-        }));
-        setPinPlaced(true);
-      } else {
-        // editable now – require pin
-        setPinPlaced(false);
-      }
-      return next;
+  // =========================
+  //   SUBMIT → CREATE SR
+  // =========================
+  const resetForm = () => {
+    setFormData({
+      customerName: "",
+      phone: "",
+      email: "",
+      address: "",
+      city: "",
+      landmark: "",
+      latitude: 40.4406,
+      longitude: -79.9959,
+      customerNotes: "",
+      categoryId: "",
+      subserviceId: "",
+      serviceId: "",
+      description: "",
+      priority: "",
+      attachments: [],
     });
+    setFoundCustomer(null);
+    setUseSavedAddress(true);
+    setSaveAsDefaultAddress(false);
+    setShowNewCustomerForm(false);
+    setPinPlaced(true);
   };
 
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setGlobalError("");
+    setSuccessMessage("");
+
+    if (!pinPlaced) {
+      setGlobalError("Please drop the pin on the map to set the job location.");
+      return;
+    }
+
+    if (!formData.phone) {
+      setGlobalError("Phone number is required.");
+      return;
+    }
+
+    if (!formData.categoryId || !formData.subserviceId) {
+      setGlobalError("Please select category and subservice.");
+      return;
+    }
+
+    if (!formData.priority) {
+      setGlobalError("Please select priority.");
+      return;
+    }
+
+    setSubmitting(true);
+
+    try {
+      const normalizedPhone = normalizePhone(formData.phone);
+
+      // ---------- 1) ensure customer ----------
+      let customerId = foundCustomer?.id;
+      let customerPhone = foundCustomer?.phone || normalizedPhone;
+
+      if (!foundCustomer) {
+        const customerPayload = {
+          name: formData.customerName || "New Customer",
+          phone: normalizedPhone,
+          password: "customer123", // TODO: দরকার মতো change করো
+          homeAddress: buildFullAddress(formData),
+          latitude: formData.latitude,
+          longitude: formData.longitude,
+        };
+
+        const { data: newCustomer } = await axiosClient.post(
+          "/callcenter/customers",
+          customerPayload,
+        );
+
+        customerId = newCustomer.id;
+        customerPhone = newCustomer.phone || normalizedPhone;
+      }
+
+      // ---------- 2) create SR ----------
+      const srPayload = {
+        phone: customerPhone,
+        address: buildFullAddress(formData),
+        latitude: formData.latitude,
+        longitude: formData.longitude,
+        categoryId: Number(formData.categoryId),
+        subserviceId: Number(formData.subserviceId),
+        serviceId: formData.serviceId ? Number(formData.serviceId) : null,
+        description: formData.description,
+        paymentType: "CASH", // 👉 চাইলে UI থেকে নেবে
+        priority: formData.priority.toUpperCase(), // LOW / MEDIUM / HIGH
+      };
+
+      const { data: createdSR } = await axiosClient.post("/sr", srPayload);
+
+      setSuccessMessage(
+        `Service Request ${
+          createdSR.srNumber || createdSR.id
+        } created successfully.`,
+      );
+      resetForm();
+    } catch (err) {
+      console.error("SR create failed", err);
+      setGlobalError(
+        err.response?.data?.message ||
+          "Failed to create Service Request. Please try again.",
+      );
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  // =========================
+  //   RENDER
+  // =========================
   return (
     <div className="min-h-full py-4">
       <div className="max-w-4xl mx-auto">
@@ -222,6 +393,24 @@ function ServiceRequestForm({ onSubmit, customers = [] }) {
               or email
             </p>
           </header>
+
+          {metaError && (
+            <div className="mb-4 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">
+              {metaError}
+            </div>
+          )}
+
+          {globalError && (
+            <div className="mb-4 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">
+              {globalError}
+            </div>
+          )}
+
+          {successMessage && (
+            <div className="mb-4 rounded-md bg-green-50 px-3 py-2 text-sm text-green-700">
+              {successMessage}
+            </div>
+          )}
 
           <form onSubmit={handleSubmit} className="space-y-6">
             {/* PHONE LOOKUP */}
@@ -243,10 +432,19 @@ function ServiceRequestForm({ onSubmit, customers = [] }) {
                   className="w-full rounded-lg border border-gray-300 bg-gray-50 px-3 py-2 text-sm focus:outline-none focus:ring-[1px] focus:ring-[#ffb111] focus:border-[#ffb111]"
                   value={formData.phone}
                   onChange={(e) =>
-                    setFormData({ ...formData, phone: e.target.value })
+                    setFormData((prev) => ({ ...prev, phone: e.target.value }))
                   }
                   required
                 />
+
+                {searchLoading && (
+                  <p className="text-xs text-gray-500">
+                    Searching customer...
+                  </p>
+                )}
+                {searchError && (
+                  <p className="text-xs text-red-500">{searchError}</p>
+                )}
               </div>
 
               {/* Existing customer info */}
@@ -265,16 +463,18 @@ function ServiceRequestForm({ onSubmit, customers = [] }) {
                         <User className="mt-0.5 h-4 w-4 text-gray-500" />
                         <div>
                           <p className="text-gray-500">Name</p>
-                          <p className="text-gray-900">{foundCustomer.name}</p>
+                          <p className="text-gray-900">
+                            {foundCustomer.name}
+                          </p>
                         </div>
                       </div>
 
                       <div className="flex items-start gap-2">
                         <Mail className="mt-0.5 h-4 w-4 text-gray-500" />
                         <div>
-                          <p className="text-gray-500">Email</p>
+                          <p className="text-gray-500">Phone</p>
                           <p className="text-gray-900">
-                            {foundCustomer.email}
+                            {foundCustomer.phone}
                           </p>
                         </div>
                       </div>
@@ -284,32 +484,11 @@ function ServiceRequestForm({ onSubmit, customers = [] }) {
                         <div>
                           <p className="text-gray-500">Address</p>
                           <p className="text-gray-900">
-                            {foundCustomer.address}
-                          </p>
-                        </div>
-                      </div>
-
-                      <div className="flex items-start gap-2">
-                        <FileText className="mt-0.5 h-4 w-4 text-gray-500" />
-                        <div>
-                          <p className="text-gray-500">Previous SRs</p>
-                          <p className="text-gray-900">
-                            {previousSRCount} service requests
+                            {foundCustomer.homeAddress}
                           </p>
                         </div>
                       </div>
                     </div>
-                  </div>
-
-                  <div className="pl-6">
-                    <button
-                      type="button"
-                      onClick={handleUseCustomer}
-                      className="inline-flex items-center rounded-full bg-green-600 px-3 py-1 text-xs font-medium text-white hover:bg-green-700"
-                    >
-                      <CheckCircle2 className="mr-1 h-3 w-3" />
-                      Use this customer
-                    </button>
                   </div>
                 </div>
               )}
@@ -342,10 +521,10 @@ function ServiceRequestForm({ onSubmit, customers = [] }) {
                         className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-[1px] focus:ring-[#ffb111] focus:border-[#ffb111]"
                         value={formData.customerName}
                         onChange={(e) =>
-                          setFormData({
-                            ...formData,
+                          setFormData((prev) => ({
+                            ...prev,
                             customerName: e.target.value,
-                          })
+                          }))
                         }
                         required
                       />
@@ -356,7 +535,7 @@ function ServiceRequestForm({ onSubmit, customers = [] }) {
                         htmlFor="newCustomerEmail"
                         className="text-xs font-medium text-gray-700"
                       >
-                        Email
+                        Email (optional)
                       </label>
                       <input
                         id="newCustomerEmail"
@@ -365,10 +544,10 @@ function ServiceRequestForm({ onSubmit, customers = [] }) {
                         className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-[1px] focus:ring-[#ffb111] focus:border-[#ffb111]"
                         value={formData.email}
                         onChange={(e) =>
-                          setFormData({
-                            ...formData,
+                          setFormData((prev) => ({
+                            ...prev,
                             email: e.target.value,
-                          })
+                          }))
                         }
                       />
                     </div>
@@ -388,10 +567,10 @@ function ServiceRequestForm({ onSubmit, customers = [] }) {
                       className="w-full resize-none rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-[1px] focus:ring-[#ffb111] focus:border-[#ffb111]"
                       value={formData.customerNotes}
                       onChange={(e) =>
-                        setFormData({
-                          ...formData,
+                        setFormData((prev) => ({
+                          ...prev,
                           customerNotes: e.target.value,
-                        })
+                        }))
                       }
                     />
                   </div>
@@ -445,7 +624,10 @@ function ServiceRequestForm({ onSubmit, customers = [] }) {
                     className="w-full rounded-lg border border-gray-300 bg-gray-50 px-3 py-2 text-sm focus:outline-none focus:ring-[1px] focus:ring-[#ffb111] focus:border-[#ffb111]"
                     value={formData.address}
                     onChange={(e) =>
-                      setFormData({ ...formData, address: e.target.value })
+                      setFormData((prev) => ({
+                        ...prev,
+                        address: e.target.value,
+                      }))
                     }
                     disabled={foundCustomer && useSavedAddress}
                     required
@@ -466,7 +648,7 @@ function ServiceRequestForm({ onSubmit, customers = [] }) {
                     className="w-full rounded-lg border border-gray-300 bg-gray-50 px-3 py-2 text-sm focus:outline-none focus:ring-[1px] focus:ring-[#ffb111] focus:border-[#ffb111]"
                     value={formData.city}
                     onChange={(e) =>
-                      setFormData({ ...formData, city: e.target.value })
+                      setFormData((prev) => ({ ...prev, city: e.target.value }))
                     }
                     disabled={foundCustomer && useSavedAddress}
                     required
@@ -488,77 +670,36 @@ function ServiceRequestForm({ onSubmit, customers = [] }) {
                   className="w-full rounded-lg border border-gray-300 bg-gray-50 px-3 py-2 text-sm focus:outline-none focus:ring-[1px] focus:ring-[#ffb111] focus:border-[#ffb111]"
                   value={formData.landmark}
                   onChange={(e) =>
-                    setFormData({ ...formData, landmark: e.target.value })
+                    setFormData((prev) => ({
+                      ...prev,
+                      landmark: e.target.value,
+                    }))
                   }
                   disabled={foundCustomer && useSavedAddress}
                 />
               </div>
 
-              {/* Map mock */}
+              {/* Google Map */}
               <div className="space-y-2">
                 <p className="text-xs font-medium text-gray-700">
                   Job Location (Drag pin to adjust)
                 </p>
+
                 <div className="overflow-hidden rounded-lg border-2 border-gray-200 bg-gray-50">
-                  <div
-                    className="relative flex w-full items-center justify-center bg-gradient-to-br from-blue-100 to-green-100"
-                    style={{ height: "320px" }}
-                  >
-                    <div
-                      className="absolute inset-0 opacity-10"
-                      style={{
-                        backgroundImage: `
-                          linear-gradient(to right, gray 1px, transparent 1px),
-                          linear-gradient(to bottom, gray 1px, transparent 1px)
-                        `,
-                        backgroundSize: "20px 20px",
-                      }}
-                    />
-
-                    <div
-                      className={`absolute ${
-                        foundCustomer && useSavedAddress
-                          ? "cursor-default"
-                          : "cursor-move"
-                      }`}
-                      style={{
-                        left: "50%",
-                        top: "50%",
-                        transform: "translate(-50%, -100%)",
-                      }}
-                      draggable={!(foundCustomer && useSavedAddress)}
-                      onDragEnd={(e) => {
-                        if (foundCustomer && useSavedAddress) return;
-                        const rect =
-                          e.currentTarget.parentElement?.getBoundingClientRect();
-                        if (!rect) return;
-
-                        const x = e.clientX - rect.left;
-                        const y = e.clientY - rect.top;
-
-                        const lat =
-                          40.4406 + 0.01 * ((rect.height / 2 - y) / 50);
-                        const lng =
-                          -79.9959 + 0.01 * ((x - rect.width / 2) / 50);
-
-                        setFormData((prev) => ({
-                          ...prev,
-                          latitude: parseFloat(lat.toFixed(6)),
-                          longitude: parseFloat(lng.toFixed(6)),
-                        }));
-                        setPinPlaced(true);
-                      }}
-                      onClick={() => {
-                        if (foundCustomer && useSavedAddress) return;
-                        setPinPlaced(true);
-                      }}
-                    >
-                      <MapPin
-                        className="h-8 w-8 text-[#c20001] drop-shadow-lg"
-                        fill="#c20001"
-                      />
-                    </div>
-                  </div>
+                  <LocationPickerMap
+                    lat={formData.latitude}
+                    lng={formData.longitude}
+                    disabled={foundCustomer && useSavedAddress}
+                    // 👉 আগের মতই object payload নেবে
+                    onChange={({ lat, lng }) => {
+                      setFormData((prev) => ({
+                        ...prev,
+                        latitude: lat,
+                        longitude: lng,
+                      }));
+                      setPinPlaced(true);
+                    }}
+                  />
                 </div>
 
                 <div className="flex items-center justify-between gap-3 rounded-lg border bg-gray-50 px-3 py-2 text-sm">
@@ -566,12 +707,12 @@ function ServiceRequestForm({ onSubmit, customers = [] }) {
                     <span className="text-gray-600">
                       Lat:{" "}
                       <span className="text-gray-900">
-                        {formData.latitude.toFixed(6)}
+                        {Number(formData.latitude).toFixed(6)}
                       </span>
                       {", "}
                       Lng:{" "}
                       <span className="text-gray-900">
-                        {formData.longitude.toFixed(6)}
+                        {Number(formData.longitude).toFixed(6)}
                       </span>
                     </span>
 
@@ -592,9 +733,6 @@ function ServiceRequestForm({ onSubmit, customers = [] }) {
                     Use current pin
                   </button>
                 </div>
-
-                <input type="hidden" value={formData.latitude} />
-                <input type="hidden" value={formData.longitude} />
               </div>
 
               <div className="flex items-center gap-2 text-sm">
@@ -625,6 +763,7 @@ function ServiceRequestForm({ onSubmit, customers = [] }) {
                 </h2>
               </div>
 
+              {/* row 1: category + subservice */}
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-1">
                   <label
@@ -636,19 +775,25 @@ function ServiceRequestForm({ onSubmit, customers = [] }) {
                   <select
                     id="category"
                     className="w-full rounded-lg border border-gray-300 bg-gray-50 px-3 py-2 text-sm focus:outline-none focus:ring-[1px] focus:ring-[#ffb111] focus:border-[#ffb111]"
-                    value={formData.category}
+                    value={formData.categoryId}
                     onChange={(e) =>
-                      setFormData({ ...formData, category: e.target.value })
+                      setFormData((prev) => ({
+                        ...prev,
+                        categoryId: e.target.value,
+                        subserviceId: "",
+                        serviceId: "",
+                      }))
                     }
                     required
                   >
                     <option value="" disabled>
                       Select category
                     </option>
-                    <option value="Electrical">Electrical</option>
-                    <option value="Plumbing">Plumbing</option>
-                    <option value="HVAC">HVAC</option>
-                    <option value="General">General</option>
+                    {categories.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name}
+                      </option>
+                    ))}
                   </select>
                 </div>
 
@@ -662,50 +807,92 @@ function ServiceRequestForm({ onSubmit, customers = [] }) {
                   <select
                     id="subservice"
                     className="w-full rounded-lg border border-gray-300 bg-gray-50 px-3 py-2 text-sm focus:outline-none focus:ring-[1px] focus:ring-[#ffb111] focus:border-[#ffb111] disabled:bg-gray-100"
-                    value={formData.subservice}
+                    value={formData.subserviceId}
                     onChange={(e) =>
-                      setFormData({ ...formData, subservice: e.target.value })
+                      setFormData((prev) => ({
+                        ...prev,
+                        subserviceId: e.target.value,
+                        serviceId: "",
+                      }))
                     }
                     required
-                    disabled={!formData.category}
+                    disabled={!formData.categoryId || subservices.length === 0}
                   >
                     <option value="" disabled>
-                      {formData.category
+                      {formData.categoryId
                         ? "Select subservice"
                         : "Select category first"}
                     </option>
-                    {availableSubservices.map((s) => (
-                      <option key={s} value={s}>
-                        {s}
+                    {subservices.map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.name}
                       </option>
                     ))}
                   </select>
                 </div>
               </div>
 
-              <div className="space-y-1">
-                <label
-                  htmlFor="priority"
-                  className="text-xs font-medium text-gray-700"
-                >
-                  Priority Level *
-                </label>
-                <select
-                  id="priority"
-                  className="w-full rounded-lg border border-gray-300 bg-gray-50 px-3 py-2 text-sm focus:outline-none focus:ring-[1px] focus:ring-[#ffb111] focus:border-[#ffb111]"
-                  value={formData.priority}
-                  onChange={(e) =>
-                    setFormData({ ...formData, priority: e.target.value })
-                  }
-                  required
-                >
-                  <option value="" disabled>
-                    Select priority
-                  </option>
-                  <option value="Low">Low</option>
-                  <option value="Medium">Medium</option>
-                  <option value="High">High</option>
-                </select>
+              {/* row 2: service + priority */}
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="space-y-1">
+                  <label
+                    htmlFor="service"
+                    className="text-xs font-medium text-gray-700"
+                  >
+                    Service
+                  </label>
+                  <select
+                    id="service"
+                    className="w-full rounded-lg border border-gray-300 bg-gray-50 px-3 py-2 text-sm focus:outline-none focus:ring-[1px] focus:ring-[#ffb111] focus:border-[#ffb111] disabled:bg-gray-100"
+                    value={formData.serviceId}
+                    onChange={(e) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        serviceId: e.target.value,
+                      }))
+                    }
+                    disabled={!formData.subserviceId || services.length === 0}
+                  >
+                    <option value="">
+                      {formData.subserviceId
+                        ? "Select service (optional)"
+                        : "Select subservice first"}
+                    </option>
+                    {services.map((srv) => (
+                      <option key={srv.id} value={srv.id}>
+                        {srv.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="space-y-1">
+                  <label
+                    htmlFor="priority"
+                    className="text-xs font-medium text-gray-700"
+                  >
+                    Priority Level *
+                  </label>
+                  <select
+                    id="priority"
+                    className="w-full rounded-lg border border-gray-300 bg-gray-50 px-3 py-2 text-sm focus:outline-none focus:ring-[1px] focus:ring-[#ffb111] focus:border-[#ffb111]"
+                    value={formData.priority}
+                    onChange={(e) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        priority: e.target.value,
+                      }))
+                    }
+                    required
+                  >
+                    <option value="" disabled>
+                      Select priority
+                    </option>
+                    <option value="LOW">Low</option>
+                    <option value="MEDIUM">Medium</option>
+                    <option value="HIGH">High</option>
+                  </select>
+                </div>
               </div>
 
               <div className="space-y-1">
@@ -722,16 +909,16 @@ function ServiceRequestForm({ onSubmit, customers = [] }) {
                   className="w-full resize-none rounded-lg border border-gray-300 bg-gray-50 px-3 py-2 text-sm focus:outline-none focus:ring-[1px] focus:ring-[#ffb111] focus:border-[#ffb111]"
                   value={formData.description}
                   onChange={(e) =>
-                    setFormData({
-                      ...formData,
+                    setFormData((prev) => ({
+                      ...prev,
                       description: e.target.value,
-                    })
+                    }))
                   }
                   required
                 />
               </div>
 
-              {/* Attachments */}
+              {/* Attachments – only UI side now */}
               <div className="space-y-2">
                 <p className="text-xs font-medium text-gray-700">
                   Attachments (Optional)
@@ -790,9 +977,10 @@ function ServiceRequestForm({ onSubmit, customers = [] }) {
             <div className="pt-2">
               <button
                 type="submit"
-                className="w-full rounded-lg bg-[#c20001] px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-[#a80000] focus:outline-none focus:ring-2 focus:ring-[#ffb111] focus:ring-offset-1"
+                disabled={submitting}
+                className="w-full rounded-lg bg-[#c20001] px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-[#a80000] focus:outline-none focus:ring-2 focus:ring-[#ffb111] focus:ring-offset-1 disabled:opacity-70"
               >
-                Create SR
+                {submitting ? "Creating..." : "Create SR"}
               </button>
             </div>
           </form>

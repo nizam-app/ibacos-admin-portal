@@ -12,3 +12,10 @@ export async function loginApi({ phone, password }) {
   return response.data;
 }
 
+// 🔹 NEW: logout API
+export async function logoutApi() {
+  // interceptor নিজে থেকে Authorization: Bearer <token> পাঠাবে
+  const response = await axiosClient.post("/auth/logout");
+  return response.data; // { message, user, timestamp } ইত্যাদি
+}
+

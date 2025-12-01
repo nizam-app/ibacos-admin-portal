@@ -1,4 +1,5 @@
-import { useState, useEffect } from "react";
+// src/pages/call-center/SRHistoryPage.jsx
+import { useState, useEffect, useMemo } from "react";
 import {
   Search,
   ChevronLeft,
@@ -9,235 +10,98 @@ import {
   Clock,
   X as CloseIcon,
 } from "lucide-react";
+import axiosClient from "../../api/axiosClient";
+import LocationPickerMap from "../../components/map/LocationPickerMap";
 
-// --- Mock data (screenshot অনুযায়ী) ---
-const mockServiceRequests = [
-  {
-    id: "SR-2024-1001",
-    customerName: "John Mitchell",
-    category: "Electrical",
-    assignedTechnician: "Mike Johnson",
-    woStatus: "In Progress",
-    priority: "High",
-    status: "In Progress",
-    date: "2024-10-28",
-  },
-  {
-    id: "SR-2024-1002",
-    customerName: "Sarah Williams",
-    category: "Plumbing",
-    assignedTechnician: "",
-    woStatus: "",
-    priority: "Medium",
-    status: "Pending",
-    date: "2024-10-29",
-  },
-  {
-    id: "SR-2024-1003",
-    customerName: "Michael Chen",
-    category: "HVAC",
-    assignedTechnician: "Carlos Rodriguez",
-    woStatus: "Completed",
-    priority: "Low",
-    status: "Resolved",
-    date: "2024-10-30",
-  },
-  {
-    id: "SR-2024-1004",
-    customerName: "Emily Rodriguez",
-    category: "General",
-    assignedTechnician: "Tom Wilson",
-    woStatus: "Assigned",
-    priority: "Medium",
-    status: "In Progress",
-    date: "2024-10-30",
-  },
-  {
-    id: "SR-2024-1005",
-    customerName: "David Thompson",
-    category: "Electrical",
-    assignedTechnician: "",
-    woStatus: "",
-    priority: "High",
-    status: "Pending",
-    date: "2024-10-31",
-  },
-  {
-    id: "SR-2024-1006",
-    customerName: "Jennifer Martinez",
-    category: "Plumbing",
-    assignedTechnician: "",
-    woStatus: "",
-    priority: "High",
-    status: "Pending",
-    date: "2024-11-01",
-  },
-  {
-    id: "SR-2024-1007",
-    customerName: "Robert Anderson",
-    category: "HVAC",
-    assignedTechnician: "Carlos Rodriguez",
-    woStatus: "In Progress",
-    priority: "Medium",
-    status: "In Progress",
-    date: "2024-11-02",
-  },
-  {
-    id: "SR-2024-1008",
-    customerName: "Lisa Parker",
-    category: "Electrical",
-    assignedTechnician: "",
-    woStatus: "",
-    priority: "Low",
-    status: "Pending",
-    date: "2024-11-03",
-  },
-  {
-    id: "SR-2024-1009",
-    customerName: "John Mitchell",
-    category: "Plumbing",
-    assignedTechnician: "",
-    woStatus: "",
-    priority: "Medium",
-    status: "Resolved",
-    date: "2024-11-04",
-  },
-  {
-    id: "SR-2024-1010",
-    customerName: "Sarah Williams",
-    category: "HVAC",
-    assignedTechnician: "",
-    woStatus: "",
-    priority: "Low",
-    status: "Pending",
-    date: "2024-11-05",
-  },
-  {
-    id: "SR-2024-1010",
-    customerName: "Sarah Williams",
-    category: "HVAC",
-    assignedTechnician: "",
-    woStatus: "",
-    priority: "Low",
-    status: "Pending",
-    date: "2024-11-05",
-  },
-  {
-    id: "SR-2024-1010",
-    customerName: "Sarah Williams",
-    category: "HVAC",
-    assignedTechnician: "",
-    woStatus: "",
-    priority: "Low",
-    status: "Pending",
-    date: "2024-11-05",
-  },
-  {
-    id: "SR-2024-1010",
-    customerName: "Sarah Williams",
-    category: "HVAC",
-    assignedTechnician: "",
-    woStatus: "",
-    priority: "Low",
-    status: "Pending",
-    date: "2024-11-05",
-  },
-  {
-    id: "SR-2024-1010",
-    customerName: "Sarah Williams",
-    category: "HVAC",
-    assignedTechnician: "",
-    woStatus: "",
-    priority: "Low",
-    status: "Pending",
-    date: "2024-11-05",
-  },
-  {
-    id: "SR-2024-1010",
-    customerName: "Sarah Williams",
-    category: "HVAC",
-    assignedTechnician: "",
-    woStatus: "",
-    priority: "Low",
-    status: "Pending",
-    date: "2024-11-05",
-  },
-  {
-    id: "SR-2024-1010",
-    customerName: "Sarah Williams",
-    category: "HVAC",
-    assignedTechnician: "",
-    woStatus: "",
-    priority: "Low",
-    status: "Pending",
-    date: "2024-11-05",
-  },
-  {
-    id: "SR-2024-1010",
-    customerName: "Sarah Williams",
-    category: "HVAC",
-    assignedTechnician: "",
-    woStatus: "",
-    priority: "Low",
-    status: "Pending",
-    date: "2024-11-05",
-  },
-  {
-    id: "SR-2024-1010",
-    customerName: "Sarah Williams",
-    category: "HVAC",
-    assignedTechnician: "",
-    woStatus: "",
-    priority: "Low",
-    status: "Pending",
-    date: "2024-11-05",
-  },
-  // চাইলে আরও বাড়াতে পারো
-];
+// ============ helpers ============
 
-function getPriorityClasses(priority) {
-  switch (priority) {
-    case "High":
+// priority badge classes (API: HIGH / MEDIUM / LOW)
+function getPriorityClasses(priorityRaw) {
+  const p = (priorityRaw || "").toString().toUpperCase();
+  switch (p) {
+    case "HIGH":
       return "bg-red-100 text-red-800";
-    case "Medium":
+    case "MEDIUM":
       return "bg-orange-100 text-orange-800";
-    case "Low":
+    case "LOW":
       return "bg-green-100 text-green-800";
     default:
       return "bg-gray-100 text-gray-800";
   }
 }
 
-function getStatusClasses(status) {
-  switch (status) {
-    case "Pending":
-      return "bg-yellow-100 text-yellow-800";
-    case "In Progress":
-      return "bg-blue-100 text-blue-800";
-    case "Resolved":
-      return "bg-green-100 text-green-800";
+// SR main status badge (API: status + readableStatus)
+function getStatusInfo(sr) {
+  const statusCode = (sr?.status || "").toString().toUpperCase();
+  const readable = sr?.readableStatus || sr?.status || "Unknown";
+
+  switch (statusCode) {
+    case "PENDING_APPROVAL":
+      return {
+        label: "Pending Approval",
+        classes: "bg-yellow-100 text-yellow-800",
+      };
+    case "IN_PROGRESS":
+      return { label: "In Progress", classes: "bg-blue-100 text-blue-800" };
+    case "RESOLVED":
+    case "COMPLETED":
+      return { label: "Resolved", classes: "bg-green-100 text-green-800" };
+    case "CANCELLED":
+      return { label: "Cancelled", classes: "bg-red-100 text-red-800" };
     default:
-      return "bg-gray-100 text-gray-800";
+      return { label: readable, classes: "bg-gray-100 text-gray-800" };
   }
 }
 
-function getWoStatusClasses(status) {
-  switch (status) {
-    case "Assigned":
+// Work order status badge
+function getWoStatusClasses(statusRaw) {
+  const s = (statusRaw || "").toString().toUpperCase();
+  switch (s) {
+    case "ASSIGNED":
       return "bg-blue-100 text-blue-800";
-    case "In Progress":
+    case "IN_PROGRESS":
       return "bg-purple-100 text-purple-800";
-    case "Completed":
+    case "COMPLETED":
       return "bg-green-100 text-green-800";
     default:
       return "bg-gray-100 text-gray-800";
   }
 }
 
-// ছোট helper – simple modal (কোনো external UI নয়)
+// timeline mapping – based on SR status / internalStatus
+function getStatusTimeline(sr) {
+  const steps = ["Created", "Assigned", "In Progress", "Resolved"];
+
+  const statusCode = (sr?.status || "").toString().toUpperCase();
+  const internal = (sr?.internalStatus || "").toString().toUpperCase();
+
+  let idx = 0; // default: at "Created"
+
+  if (statusCode === "PENDING_APPROVAL" || internal === "NEW") idx = 0;
+  else if (statusCode === "ASSIGNED" || internal === "ASSIGNED") idx = 1;
+  else if (statusCode === "IN_PROGRESS") idx = 2;
+  else if (statusCode === "RESOLVED" || statusCode === "COMPLETED") idx = 3;
+  else if (statusCode === "CANCELLED") idx = 0; // cancelled: শুধু Created active
+
+  return steps.map((label, i) => ({
+    status: label,
+    active: i <= idx,
+  }));
+}
+
+// date helper
+function formatDate(value) {
+  if (!value) return "";
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) {
+    return String(value).slice(0, 10);
+  }
+  return d.toISOString().slice(0, 10);
+}
+
+// small modal
 function Modal({ open, onClose, children }) {
   if (!open) return null;
-
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
       <div className="relative flex max-h-[90vh] w-full max-w-3xl flex-col overflow-hidden rounded-xl bg-white shadow-lg">
@@ -253,9 +117,9 @@ function Modal({ open, onClose, children }) {
   );
 }
 
+// confirm dialog
 function ConfirmDialog({ open, onClose, onConfirm, disabled, children }) {
   if (!open) return null;
-
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
       <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-lg">
@@ -282,39 +146,99 @@ function ConfirmDialog({ open, onClose, onConfirm, disabled, children }) {
   );
 }
 
-export default function SRHistoryPage({ serviceRequests = mockServiceRequests }) {
+export default function SRHistoryPage() {
+  const [serviceRequests, setServiceRequests] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
+
   const [searchQuery, setSearchQuery] = useState("");
   const [filterCategory, setFilterCategory] = useState("all");
   const [filterStatus, setFilterStatus] = useState("all");
+
   const [selectedSR, setSelectedSR] = useState(null);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
+
   const [showCancelDialog, setShowCancelDialog] = useState(false);
   const [cancelReason, setCancelReason] = useState("");
+  const [cancelLoading, setCancelLoading] = useState(false);
+  const [cancelError, setCancelError] = useState("");
+
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
 
-  // filters change হলে page 1 এ ফেরা
+  // ===== API: load SR list =====
+  useEffect(() => {
+    const fetchSRs = async () => {
+      try {
+        setLoading(true);
+        setLoadError("");
+        const { data } = await axiosClient.get("/sr");
+        setServiceRequests(Array.isArray(data) ? data : []);
+      } catch (err) {
+        console.error("Failed to load service requests", err);
+        setLoadError(
+          err.response?.data?.message ||
+            "Failed to load service requests. Please try again."
+        );
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchSRs();
+  }, []);
+
+  // filters change হলে page 1 এ reset
   useEffect(() => {
     setCurrentPage(1);
   }, [searchQuery, filterCategory, filterStatus]);
 
+  // category dropdown options – API data থেকে unique list
+  const categoryOptions = useMemo(() => {
+    const set = new Set();
+    serviceRequests.forEach((sr) => {
+      if (sr.category?.name) set.add(sr.category.name);
+    });
+    return Array.from(set);
+  }, [serviceRequests]);
+
+  // status dropdown options – label থেকে unique list
+  const statusOptions = useMemo(() => {
+    const set = new Set();
+    serviceRequests.forEach((sr) => {
+      set.add(getStatusInfo(sr).label);
+    });
+    return Array.from(set);
+  }, [serviceRequests]);
+
   // search + filter
-  const filteredServiceRequests = serviceRequests.filter((sr) => {
-    const q = searchQuery.toLowerCase();
-    const matchesSearch =
-      q === "" ||
-      sr.id.toLowerCase().includes(q) ||
-      sr.customerName.toLowerCase().includes(q);
+  const filteredServiceRequests = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
 
-    const matchesCategory =
-      filterCategory === "all" || sr.category === filterCategory;
-    const matchesStatus = filterStatus === "all" || sr.status === filterStatus;
+    return serviceRequests.filter((sr) => {
+      const srId = (sr.srNumber || sr.id || "").toString();
+      const customerName = (sr.customer?.name || "").toString();
+      const categoryName = (sr.category?.name || "").toString();
 
-    return matchesSearch && matchesCategory && matchesStatus;
-  });
+      const matchesSearch =
+        q === "" ||
+        srId.toLowerCase().includes(q) ||
+        customerName.toLowerCase().includes(q);
+
+      const matchesCategory =
+        filterCategory === "all" || categoryName === filterCategory;
+
+      const statusLabel = getStatusInfo(sr).label;
+      const matchesStatus =
+        filterStatus === "all" || statusLabel === filterStatus;
+
+      return matchesSearch && matchesCategory && matchesStatus;
+    });
+  }, [serviceRequests, searchQuery, filterCategory, filterStatus]);
 
   // pagination
-  const totalPages = Math.ceil(filteredServiceRequests.length / itemsPerPage) || 1;
+  const totalPages =
+    Math.ceil(filteredServiceRequests.length / itemsPerPage) || 1;
   const startIndex = (currentPage - 1) * itemsPerPage;
   const endIndex = startIndex + itemsPerPage;
   const paginatedServiceRequests = filteredServiceRequests.slice(
@@ -330,53 +254,84 @@ export default function SRHistoryPage({ serviceRequests = mockServiceRequests })
     setShowDetailsModal(true);
   };
 
-  const getStatusTimeline = (status) => {
-    const statuses = ["Created", "Assigned", "In Progress", "Resolved"];
-    const currentIndex = statuses.indexOf(
-      status === "Pending" ? "Created" : status
+  const details = selectedSR || {};
+  const statusTimeline = selectedSR ? getStatusTimeline(selectedSR) : [];
+
+  const technicianName =
+    typeof details.assignedTechnician === "string"
+      ? details.assignedTechnician
+      : details.assignedTechnician?.name || "";
+
+  const statusCodeForSelected = selectedSR
+    ? (selectedSR.status || "").toString().toUpperCase()
+    : "";
+  const canCancel =
+    selectedSR &&
+    !["RESOLVED", "COMPLETED", "CANCELLED"].includes(statusCodeForSelected);
+
+  // ===== Cancel SR handler =====
+ const handleCancelConfirm = async () => {
+  if (!selectedSR || !cancelReason.trim()) return;
+
+  try {
+    setCancelLoading(true);
+    setCancelError("");
+
+    // ⬇️ এখানে PATCH + reason
+    const { data } = await axiosClient.patch(
+      `/sr/${selectedSR.id}/cancel`,
+      {
+        reason: cancelReason.trim(),
+      }
     );
 
-    return statuses.map((s, index) => ({
-      status: s,
-      active: currentIndex === -1 ? false : index <= currentIndex,
-    }));
-  };
+    const updated = data?.serviceRequest || data;
 
-  // Modal এর জন্য mock details (real API আসলে এখান থেকে replace করবে)
-  const getCustomerDetails = (sr) => {
-    if (!sr) return {};
-    return {
-      phone: sr.customerPhone || "(555) 123-4567",
-      email: sr.customerEmail || "customer@email.com",
-      address:
-        sr.customerAddress || "123 Main Street, Pittsburgh, PA 15213",
-      subservice: sr.subservice || "Installation",
-      description:
-        sr.description ||
-        `Customer requires service for ${sr.category.toLowerCase()} work. Please contact for more details.`,
-    };
-  };
+    // list আপডেট
+    setServiceRequests((prev) =>
+      prev.map((sr) => (sr.id === updated.id ? { ...sr, ...updated } : sr))
+    );
 
-  const details = getCustomerDetails(selectedSR);
+    // modal এর selected SR আপডেট
+    setSelectedSR((prev) =>
+      prev && prev.id === updated.id ? { ...prev, ...updated } : prev
+    );
 
-  const statusTimeline = selectedSR
-    ? getStatusTimeline(selectedSR.status)
-    : [];
+    setShowCancelDialog(false);
+    setCancelReason("");
+    // চাইলে এখানে toast/alert দিতে পারো
+    // toast.success(data?.message || "Service Request cancelled successfully");
+  } catch (err) {
+    console.error("SR cancel failed", err);
+    setCancelError(
+      err.response?.data?.message ||
+        "Failed to cancel service request. Please try again."
+    );
+  } finally {
+    setCancelLoading(false);
+  }
+};
+
+
 
   return (
     <div className="space-y-4">
-      {/* Card */}
       <div className="rounded-xl border border-neutral-300 bg-white shadow-sm">
-        <div className="px-6 pt-6 pb-4 border-b-1 border-gray-400">
-          <h2 className="text-lg font-semibold">
-            Service Request History
-          </h2>
+        <div className="px-6 pt-6 pb-4 border-b border-gray-200">
+          <h2 className="text-lg font-semibold">Service Request History</h2>
           <p className="mt-1 text-sm text-gray-500">
             View and search all submitted service requests
           </p>
         </div>
 
         <div className="px-6 pb-6 pt-4">
+          {/* error / loading banner */}
+          {loadError && (
+            <div className="mb-4 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">
+              {loadError}
+            </div>
+          )}
+
           {/* Search + filters */}
           <div className="mb-4 space-y-4">
             <div className="flex flex-col items-end gap-4 sm:flex-row">
@@ -399,10 +354,11 @@ export default function SRHistoryPage({ serviceRequests = mockServiceRequests })
                 className="h-10 w-[160px] rounded-md border border-gray-300 bg-white px-3 text-sm outline-none focus:border-[#c20001] focus:ring-2 focus:ring-[#c20001]/30"
               >
                 <option value="all">All Categories</option>
-                <option value="Electrical">Electrical</option>
-                <option value="Plumbing">Plumbing</option>
-                <option value="HVAC">HVAC</option>
-                <option value="General">General</option>
+                {categoryOptions.map((cat) => (
+                  <option key={cat} value={cat}>
+                    {cat}
+                  </option>
+                ))}
               </select>
 
               {/* status filter */}
@@ -412,9 +368,11 @@ export default function SRHistoryPage({ serviceRequests = mockServiceRequests })
                 className="h-10 w-[150px] rounded-md border border-gray-300 bg-white px-3 text-sm outline-none focus:border-[#c20001] focus:ring-2 focus:ring-[#c20001]/30"
               >
                 <option value="all">All Status</option>
-                <option value="Pending">Pending</option>
-                <option value="In Progress">In Progress</option>
-                <option value="Resolved">Resolved</option>
+                {statusOptions.map((st) => (
+                  <option key={st} value={st}>
+                    {st}
+                  </option>
+                ))}
               </select>
             </div>
 
@@ -463,7 +421,16 @@ export default function SRHistoryPage({ serviceRequests = mockServiceRequests })
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200 bg-white">
-                {paginatedServiceRequests.length === 0 ? (
+                {loading ? (
+                  <tr>
+                    <td
+                      colSpan={8}
+                      className="px-4 py-6 text-center text-sm text-gray-500"
+                    >
+                      Loading service requests...
+                    </td>
+                  </tr>
+                ) : paginatedServiceRequests.length === 0 ? (
                   <tr>
                     <td
                       colSpan={8}
@@ -475,67 +442,81 @@ export default function SRHistoryPage({ serviceRequests = mockServiceRequests })
                     </td>
                   </tr>
                 ) : (
-                  paginatedServiceRequests.map((sr) => (
-                    <tr
-                      key={sr.id}
-                      className="cursor-pointer hover:bg-gray-50"
-                      onClick={() => handleViewDetails(sr)}
-                    >
-                      <td className="px-4 py-3 text-[#c20001]">{sr.id}</td>
-                      <td className="px-4 py-3">{sr.customerName}</td>
-                      <td className="px-4 py-3">{sr.category}</td>
-                      <td className="px-4 py-3">
-                        {sr.assignedTechnician ? (
-                          <span className="text-gray-900">
-                            {sr.assignedTechnician}
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-gray-600">
-                            Unassigned
-                          </span>
-                        )}
-                      </td>
-                      <td className="px-4 py-3">
-                        {sr.woStatus ? (
+                  paginatedServiceRequests.map((sr) => {
+                    const statusInfo = getStatusInfo(sr);
+                    const priorityClasses = getPriorityClasses(sr.priority);
+                    const woStatus = sr.woStatus;
+                    const woStatusClasses = getWoStatusClasses(woStatus);
+
+                    const srId = sr.srNumber || sr.id;
+                    const customerName = sr.customer?.name || "—";
+                    const categoryName = sr.category?.name || "—";
+                    const dateCreated = formatDate(sr.createdAt);
+
+                    const rowTechnicianName =
+                      typeof sr.assignedTechnician === "string"
+                        ? sr.assignedTechnician
+                        : sr.assignedTechnician?.name;
+
+                    return (
+                      <tr
+                        key={sr.id}
+                        className="cursor-pointer hover:bg-gray-50"
+                        onClick={() => handleViewDetails(sr)}
+                      >
+                        <td className="px-4 py-3 text-[#c20001]">{srId}</td>
+                        <td className="px-4 py-3">{customerName}</td>
+                        <td className="px-4 py-3">{categoryName}</td>
+                        <td className="px-4 py-3">
+                          {rowTechnicianName ? (
+                            <span className="text-gray-900">
+                              {rowTechnicianName}
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-gray-600">
+                              Unassigned
+                            </span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3">
+                          {woStatus ? (
+                            <span
+                              className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${woStatusClasses}`}
+                            >
+                              {woStatus}
+                            </span>
+                          ) : (
+                            <span className="text-xs text-gray-400">—</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3">
                           <span
-                            className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${getWoStatusClasses(
-                              sr.woStatus
-                            )}`}
+                            className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${priorityClasses}`}
                           >
-                            {sr.woStatus}
+                            {sr.priority
+                              ? sr.priority.charAt(0) +
+                                sr.priority.slice(1).toLowerCase()
+                              : "—"}
                           </span>
-                        ) : (
-                          <span className="text-xs text-gray-400">—</span>
-                        )}
-                      </td>
-                      <td className="px-4 py-3">
-                        <span
-                          className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${getPriorityClasses(
-                            sr.priority
-                          )}`}
-                        >
-                          {sr.priority}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3">
-                        <span
-                          className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${getStatusClasses(
-                            sr.status
-                          )}`}
-                        >
-                          {sr.status}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3">{sr.date}</td>
-                    </tr>
-                  ))
+                        </td>
+                        <td className="px-4 py-3">
+                          <span
+                            className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${statusInfo.classes}`}
+                          >
+                            {statusInfo.label}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3">{dateCreated}</td>
+                      </tr>
+                    );
+                  })
                 )}
               </tbody>
             </table>
           </div>
 
           {/* Pagination */}
-          {filteredServiceRequests.length > itemsPerPage && (
+          {!loading && filteredServiceRequests.length > itemsPerPage && (
             <div className="mt-4 flex items-center justify-between text-sm text-gray-600">
               <div>
                 Showing {startIndex + 1} to{" "}
@@ -601,7 +582,7 @@ export default function SRHistoryPage({ serviceRequests = mockServiceRequests })
         </div>
       </div>
 
-      {/* Details modal */}
+      {/* ===== Details Modal ===== */}
       <Modal
         open={!!selectedSR && showDetailsModal}
         onClose={() => setShowDetailsModal(false)}
@@ -614,25 +595,26 @@ export default function SRHistoryPage({ serviceRequests = mockServiceRequests })
                   Service Request Details
                 </h3>
                 <p className="sr-only">
-                  Complete information for service request {selectedSR.id}
+                  Complete information for service request{" "}
+                  {selectedSR.srNumber || selectedSR.id}
                 </p>
               </div>
               <div className="flex flex-col items-end gap-2">
                 <span className="text-sm font-medium text-[#c20001]">
-                  {selectedSR.id}
+                  {selectedSR.srNumber || selectedSR.id}
                 </span>
                 <span
-                  className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${getStatusClasses(
-                    selectedSR.status
-                  )}`}
+                  className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
+                    getStatusInfo(selectedSR).classes
+                  }`}
                 >
-                  {selectedSR.status}
+                  {getStatusInfo(selectedSR).label}
                 </span>
               </div>
             </div>
 
             <div className="flex-1 space-y-5 overflow-y-auto px-6 pb-4 pt-4">
-              {/* top two-column: customer + map */}
+              {/* top: customer + map */}
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 {/* customer info */}
                 <div>
@@ -642,74 +624,54 @@ export default function SRHistoryPage({ serviceRequests = mockServiceRequests })
                   <div className="space-y-3 rounded-lg bg-gray-50 p-4 text-sm">
                     <div>
                       <div className="text-xs text-gray-500">Name</div>
-                      <div className="mt-1">{selectedSR.customerName}</div>
+                      <div className="mt-1">
+                        {selectedSR.customer?.name || "—"}
+                      </div>
                     </div>
                     <div>
                       <div className="text-xs text-gray-500 flex items-center gap-1">
                         <Phone className="h-3 w-3" />
                         Phone
                       </div>
-                      <div className="mt-1">{details.phone}</div>
-                    </div>
-                    <div>
-                      <div className="text-xs text-gray-500">Email</div>
-                      <div className="mt-1">{details.email}</div>
+                      <div className="mt-1">
+                        {selectedSR.customer?.phone || "—"}
+                      </div>
                     </div>
                     <div>
                       <div className="text-xs text-gray-500">Address</div>
-                      <div className="mt-1">{details.address}</div>
-                      {selectedSR.landmark && (
-                        <div className="mt-1 flex items-start gap-1 text-xs text-gray-500">
-                          <MapPin className="mt-0.5 h-3 w-3" />
-                          {selectedSR.landmark}
-                        </div>
-                      )}
+                      <div className="mt-1">
+                        {selectedSR.address || "—"}
+                      </div>
                     </div>
                   </div>
                 </div>
 
-                {/* map preview */}
+                {/* job location map (real map component) */}
                 <div>
                   <h4 className="mb-2 text-sm font-semibold text-[#c20001]">
                     Job Location
                   </h4>
-                  <div className="h-64 overflow-hidden rounded-lg border-2 border-gray-200 bg-gray-50">
-                    <div className="relative flex h-full w-full items-center justify-center bg-gradient-to-br from-blue-100 to-green-100">
-                      <div
-                        className="absolute inset-0 opacity-10"
-                        style={{
-                          backgroundImage: `
-                            linear-gradient(to right, gray 1px, transparent 1px),
-                            linear-gradient(to bottom, gray 1px, transparent 1px)
-                          `,
-                          backgroundSize: "20px 20px",
-                        }}
-                      />
-                      <div
-                        className="absolute"
-                        style={{
-                          left: "50%",
-                          top: "50%",
-                          transform: "translate(-50%, -100%)",
-                        }}
-                      >
-                        <MapPin
-                          className="h-8 w-8 text-[#c20001] drop-shadow-lg"
-                          fill="#c20001"
-                        />
-                      </div>
-                      <div className="absolute bottom-2 left-2 rounded bg-white px-3 py-1 text-xs shadow-sm">
-                        <span className="text-gray-600">Lat: </span>
-                        <span className="text-gray-900">
-                          {selectedSR.latitude?.toFixed(6) || "40.440600"}
-                        </span>
-                        <span className="mx-2">|</span>
-                        <span className="text-gray-600">Lng: </span>
-                        <span className="text-gray-900">
-                          {selectedSR.longitude?.toFixed(6) || "-79.995900"}
-                        </span>
-                      </div>
-                    </div>
+                  <div className="overflow-hidden rounded-lg border-2 border-gray-200 bg-gray-50">
+                    <LocationPickerMap
+                      lat={selectedSR.latitude ?? 40.4406}
+                      lng={selectedSR.longitude ?? -79.9959}
+                      disabled={true}
+                    />
+                  </div>
+                  <div className="mt-2 inline-flex rounded bg-white px-3 py-1 text-xs shadow-sm">
+                    <span className="text-gray-600">Lat:&nbsp;</span>
+                    <span className="text-gray-900">
+                      {selectedSR.latitude != null
+                        ? selectedSR.latitude.toFixed(6)
+                        : "40.440600"}
+                    </span>
+                    <span className="mx-2">|</span>
+                    <span className="text-gray-600">Lng:&nbsp;</span>
+                    <span className="text-gray-900">
+                      {selectedSR.longitude != null
+                        ? selectedSR.longitude.toFixed(6)
+                        : "-79.995900"}
+                    </span>
                   </div>
                 </div>
               </div>
@@ -722,11 +684,21 @@ export default function SRHistoryPage({ serviceRequests = mockServiceRequests })
                 <div className="grid grid-cols-2 gap-3 rounded-lg bg-gray-50 p-4 text-sm">
                   <div>
                     <div className="text-xs text-gray-500">Category</div>
-                    <div className="mt-1">{selectedSR.category}</div>
+                    <div className="mt-1">
+                      {selectedSR.category?.name || "—"}
+                    </div>
                   </div>
                   <div>
                     <div className="text-xs text-gray-500">Subservice</div>
-                    <div className="mt-1">{details.subservice}</div>
+                    <div className="mt-1">
+                      {selectedSR.subservice?.name || "—"}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-gray-500">Service</div>
+                    <div className="mt-1">
+                      {selectedSR.service?.name || "—"}
+                    </div>
                   </div>
                   <div>
                     <div className="text-xs text-gray-500">Priority</div>
@@ -736,17 +708,24 @@ export default function SRHistoryPage({ serviceRequests = mockServiceRequests })
                           selectedSR.priority
                         )}`}
                       >
-                        {selectedSR.priority}
+                        {selectedSR.priority
+                          ? selectedSR.priority.charAt(0) +
+                            selectedSR.priority.slice(1).toLowerCase()
+                          : "—"}
                       </span>
                     </div>
                   </div>
                   <div>
                     <div className="text-xs text-gray-500">Date Created</div>
-                    <div className="mt-1">{selectedSR.date}</div>
+                    <div className="mt-1">
+                      {formatDate(selectedSR.createdAt)}
+                    </div>
                   </div>
                   <div className="col-span-2">
                     <div className="text-xs text-gray-500">Description</div>
-                    <div className="mt-1">{details.description}</div>
+                    <div className="mt-1">
+                      {selectedSR.description || "—"}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -780,8 +759,8 @@ export default function SRHistoryPage({ serviceRequests = mockServiceRequests })
                 </div>
               </div>
 
-              {/* technician / work order */}
-              {selectedSR.workOrderId && selectedSR.assignedTechnician ? (
+              {/* technician / WO */}
+              {technicianName ? (
                 <div>
                   <h4 className="mb-2 text-sm font-semibold text-[#c20001]">
                     Assigned Technician
@@ -793,9 +772,7 @@ export default function SRHistoryPage({ serviceRequests = mockServiceRequests })
                           <Briefcase className="h-3 w-3" />
                           Technician
                         </div>
-                        <div className="mt-1">
-                          {selectedSR.assignedTechnician}
-                        </div>
+                        <div className="mt-1">{technicianName}</div>
                       </div>
                       <div>
                         <div className="flex items-center gap-1 text-xs text-gray-500">
@@ -803,14 +780,7 @@ export default function SRHistoryPage({ serviceRequests = mockServiceRequests })
                           Phone
                         </div>
                         <div className="mt-1">
-                          {selectedSR.technicianPhone || "(555) 123-4567"}
-                        </div>
-                      </div>
-                      <div>
-                        <div className="text-xs text-gray-500">Specialty</div>
-                        <div className="mt-1">
-                          {selectedSR.technicianSpecialty ||
-                            selectedSR.category}
+                          {selectedSR.technicianPhone || "—"}
                         </div>
                       </div>
                       <div>
@@ -818,43 +788,21 @@ export default function SRHistoryPage({ serviceRequests = mockServiceRequests })
                         <div className="mt-1">
                           <span
                             className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${getWoStatusClasses(
-                              selectedSR.woStatus || "Assigned"
+                              selectedSR.woStatus || "ASSIGNED"
                             )}`}
                           >
                             {selectedSR.woStatus || "Assigned"}
                           </span>
                         </div>
                       </div>
-                      <div className="col-span-2">
+                      <div>
                         <div className="flex items-center gap-1 text-xs text-gray-500">
                           <Clock className="h-3 w-3" />
-                          Last Location
+                          Last Update
                         </div>
                         <div className="mt-1 text-xs text-gray-600">
-                          Last seen {selectedSR.lastSeenTime || "15 mins ago"}
+                          {selectedSR.lastSeenTime || "—"}
                         </div>
-                      </div>
-                    </div>
-
-                    <div className="pt-2">
-                      <button
-                        type="button"
-                        onClick={() =>
-                          alert(
-                            "In real app, technician map view/open in new page."
-                          )
-                        }
-                        className="flex w-full items-center justify-center rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
-                      >
-                        <MapPin className="mr-2 h-4 w-4" />
-                        View Technician on Map
-                      </button>
-                    </div>
-
-                    <div className="border-t border-gray-200 pt-2 text-xs">
-                      <div className="text-gray-500">Work Order ID</div>
-                      <div className="mt-1 font-medium text-[#c20001]">
-                        {selectedSR.workOrderId}
                       </div>
                     </div>
                   </div>
@@ -871,11 +819,14 @@ export default function SRHistoryPage({ serviceRequests = mockServiceRequests })
               )}
 
               {/* cancel button */}
-              {!selectedSR.workOrderId && selectedSR.status !== "Resolved" && (
+              {canCancel && (
                 <div className="flex justify-center pb-2 pt-2">
                   <button
                     type="button"
-                    onClick={() => setShowCancelDialog(true)}
+                    onClick={() => {
+                      setShowCancelDialog(true);
+                      setCancelError("");
+                    }}
                     className="inline-flex items-center rounded-md border border-red-300 bg-white px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50"
                   >
                     Cancel Request
@@ -884,7 +835,6 @@ export default function SRHistoryPage({ serviceRequests = mockServiceRequests })
               )}
             </div>
 
-            {/* footer close */}
             <div className="border-t px-6 pb-6 pt-4">
               <button
                 type="button"
@@ -904,18 +854,12 @@ export default function SRHistoryPage({ serviceRequests = mockServiceRequests })
         onClose={() => {
           setShowCancelDialog(false);
           setCancelReason("");
+          setCancelError("");
         }}
-        onConfirm={() => {
-          console.log("Cancel SR:", selectedSR?.id, "Reason:", cancelReason);
-          setShowCancelDialog(false);
-          setShowDetailsModal(false);
-          setCancelReason("");
-        }}
-        disabled={!cancelReason.trim()}
+        onConfirm={handleCancelConfirm}
+        disabled={!cancelReason.trim() || cancelLoading}
       >
-        <h3 className="text-base font-semibold">
-          Cancel Service Request
-        </h3>
+        <h3 className="text-base font-semibold">Cancel Service Request</h3>
         <p className="mt-1 text-sm text-gray-600">
           Please provide a reason for cancelling this service request. This
           action cannot be undone.
@@ -927,6 +871,9 @@ export default function SRHistoryPage({ serviceRequests = mockServiceRequests })
           placeholder="Enter cancellation reason..."
           className="mt-3 w-full resize-none rounded-md border border-gray-300 px-3 py-2 text-sm outline-none focus:border-[#c20001] focus:ring-2 focus:ring-[#c20001]/30"
         />
+        {cancelError && (
+          <p className="mt-2 text-xs text-red-600">{cancelError}</p>
+        )}
       </ConfirmDialog>
     </div>
   );
