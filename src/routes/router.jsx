@@ -14,9 +14,14 @@ import SRHistoryPage from "../pages/call-center/SRHistory";
 
 import DispatcherDashboard from "../pages/dispatcher/Dashboard";
 import DispatcherServiceRequests from "../pages/dispatcher/DispatcherServiceRequests";
-import DispatcherWorkOrdersPage from "../pages/dispatcher/DispatcherWorkOrdersPage";
+import DispatcherWorkOrders from "../pages/dispatcher/DispatcherWorkOrders";
+import DispatcherTechnicians from '../pages/dispatcher/DispatcherTechnicians';
+import DispatcherPayments from "../pages/dispatcher/DispatcherPayments";
 
 import AdminDashboard from "../pages/administrator/Dashboard";
+import AdminWorkOrders from "../pages/administrator/AdminWorkOrders";
+import AdminPaymentsPage from "../pages/administrator/AdminPaymentsPage";
+// import AdminTechniciansPage from "../pages/administrator/AdminTechniciansPage";
 
 import ProtectedRoute from "./ProtectedRoute";
 import TechnicianMapView from "../pages/dispatcher/TechnicianMapView";
@@ -27,7 +32,6 @@ const Router = createBrowserRouter([
     element: <Login />,
   },
 
-  // 🔴 CALL CENTER ROUTES – শুধু CALL_CENTER role
   {
     path: "/call-center",
     element: (
@@ -64,9 +68,9 @@ const Router = createBrowserRouter([
       { path: "overview", element: <DispatcherDashboard /> },
       { path: "technician-map", element: <TechnicianMapView /> },
       { path: "service-requests", element: <DispatcherServiceRequests /> },
-      { path: "work-orders", element: <DispatcherWorkOrdersPage /> },
-      { path: "payments", element: <h3>payment coming soon.....</h3> },
-      { path: "technicians", element: <h3>technicians coming soon.....</h3> },
+      { path: "work-orders", element: <DispatcherWorkOrders></DispatcherWorkOrders> },
+      { path: "payments", element: <DispatcherPayments></DispatcherPayments> },
+      { path: "technicians", element: <DispatcherTechnicians /> },
     ],
   },
 
@@ -78,7 +82,12 @@ const Router = createBrowserRouter([
         <DashboardLayout sidebar={<AdminSidebar />} />
       </ProtectedRoute>
     ),
-    children: [{ path: "overview", element: <AdminDashboard /> }],
+    children: [
+      { path: "overview", element: <AdminDashboard /> },
+      { path: "work-orders", element: <AdminWorkOrders /> },
+      { path: "payments", element: <AdminPaymentsPage /> },
+      // { path: "technicians", element: <AdminTechniciansPage /> }
+    ],
   },
 ]);
 

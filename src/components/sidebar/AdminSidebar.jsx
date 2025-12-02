@@ -1,5 +1,5 @@
 // src/components/sidebar/AdminSidebar.jsx
-import { NavLink } from "react-router-dom";
+import { NavLink, useNavigate } from "react-router-dom";
 import {
   LayoutDashboard,
   FileText,
@@ -14,6 +14,8 @@ import {
   Percent,
   LogOut,
 } from "lucide-react";
+import Swal from "sweetalert2";
+import { logoutApi } from "../../api/authApi";
 
 const linkBaseClasses =
   "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors";
@@ -27,6 +29,58 @@ const getLinkClasses = ({ isActive }) =>
   ].join(" ");
 
 const AdminSidebar = () => {
+  const navigate = useNavigate();
+
+  const handleLogout = async (e) => {
+    e.preventDefault();
+
+    // SweetAlert confirm
+    const result = await Swal.fire({
+      title: "Logout?",
+      text: "Are you sure you want to logout from Call Center?",
+      icon: "warning",
+      showCancelButton: true,
+      confirmButtonColor: "#c20001",
+      cancelButtonColor: "#6b7280",
+      confirmButtonText: "Yes, logout",
+      cancelButtonText: "Cancel",
+      reverseButtons: true,
+    });
+
+    if (!result.isConfirmed) return;
+
+    try {
+      await logoutApi();
+    } catch (err) {
+      console.error("Logout failed", err);
+      // error alert
+      await Swal.fire({
+        title: "Logout failed",
+        text:
+          err.response?.data?.message ||
+          "Something went wrong while logging out.",
+        icon: "error",
+        confirmButtonColor: "#c20001",
+      });
+      return;
+    }
+
+    // localStorage clear
+    localStorage.removeItem("token");
+    localStorage.removeItem("user");
+
+    // success alert
+    await Swal.fire({
+      title: "Logged out",
+      text: "You have been logged out successfully.",
+      icon: "success",
+      confirmButtonColor: "#c20001",
+      timer: 1500,
+      showConfirmButton: false,
+    });
+
+    navigate("/");
+  };
   return (
     <nav className="flex h-full flex-col py-4">
       {/* main menu */}
@@ -87,24 +141,15 @@ const AdminSidebar = () => {
         </NavLink>
       </div>
 
-      {/* logout – bottom fixed */}
-      <div className="mt-auto border-t border-gray-200 pt-4 px-3">
-        <NavLink
-          to="/logout"
-          className={({ isActive }) =>
-            [
-              linkBaseClasses,
-              "text-red-600 hover:text-red-700 hover:bg-red-50",
-              isActive && "bg-red-50",
-            ]
-              .filter(Boolean)
-              .join(" ")
-          }
-        >
-          <LogOut className="h-4 w-4" />
-          <span>Logout</span>
-        </NavLink>
-      </div>
+      {/* Logout */}
+      <a
+        href="#logout"
+        onClick={handleLogout}
+        className="mt-4 flex items-center gap-2 px-4 py-2 text-[#c20001] text-sm font-medium hover:bg-red-200 rounded-lg"
+      >
+        <span>↩</span>
+        <span>Logout</span>
+      </a>
     </nav>
   );
 };
