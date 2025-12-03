@@ -1,0 +1,1445 @@
+// src/pages/administrator/AdminPayoutManagement.jsx
+import React, { useState } from "react";
+import Swal from "sweetalert2";
+
+// --------------------------------------------------
+// Small Tailwind UI helpers (Card, Button, Badge, etc.)
+// --------------------------------------------------
+const Card = ({ className = "", children }) => (
+  <div className={"bg-white rounded-xl border border-gray-200 shadow-sm " + className}>
+    {children}
+  </div>
+);
+
+const CardHeader = ({ className = "", children }) => (
+  <div className={"px-6 pt-5 pb-3 border-b border-gray-100 " + className}>{children}</div>
+);
+
+const CardContent = ({ className = "", children }) => (
+  <div className={"px-6 pb-6 pt-4 " + className}>{children}</div>
+);
+
+const CardTitle = ({ className = "", children }) => (
+  <h2 className={"text-base font-semibold text-gray-900 " + className}>{children}</h2>
+);
+
+const CardDescription = ({ className = "", children }) => (
+  <p className={"text-sm text-gray-500 " + className}>{children}</p>
+);
+
+const Button = ({
+  children,
+  variant = "solid",
+  size = "md",
+  className = "",
+  ...props
+}) => {
+  const base =
+    "inline-flex items-center justify-center rounded-lg font-medium focus:outline-none focus:ring-2 focus:ring-offset-1 transition-colors";
+  const variants = {
+    solid: "bg-[#c20001] text-white hover:bg-[#a00001]",
+    outline:
+      "border border-gray-300 text-gray-700 bg-white hover:bg-gray-50",
+    ghost: "text-gray-700 hover:bg-gray-100",
+  };
+  const sizes = {
+    sm: "h-9 px-3 text-sm",
+    md: "h-10 px-4 text-sm",
+  };
+  return (
+    <button
+      className={`${base} ${variants[variant]} ${sizes[size]} ${className}`}
+      {...props}
+    >
+      {children}
+    </button>
+  );
+};
+
+const Badge = ({ className = "", children }) => (
+  <span
+    className={
+      "inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium " +
+      className
+    }
+  >
+    {children}
+  </span>
+);
+
+const Input = ({ className = "", ...props }) => (
+  <input
+    className={
+      "w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#c20001] " +
+      className
+    }
+    {...props}
+  />
+);
+
+const Textarea = ({ className = "", ...props }) => (
+  <textarea
+    className={
+      "w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#c20001] " +
+      className
+    }
+    {...props}
+  />
+);
+
+const Label = ({ className = "", children }) => (
+  <label className={"block text-xs font-medium text-gray-700 " + className}>
+    {children}
+  </label>
+);
+
+// Simple modal wrapper
+const Modal = ({ open, onClose, children, maxWidth = "max-w-2xl" }) => {
+  if (!open) return null;
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+      <div
+        className={`bg-white rounded-2xl shadow-xl w-full ${maxWidth} max-h-[80vh] overflow-y-auto`}
+      >
+        <div className="flex justify-end p-3 border-b border-gray-100">
+          <button
+            onClick={onClose}
+            className="text-gray-400 hover:text-gray-600 text-sm"
+          >
+            ✕
+          </button>
+        </div>
+        <div className="px-6 pb-6 pt-2">{children}</div>
+      </div>
+    </div>
+  );
+};
+
+// --------------------------------------------------
+// Custom SVG icons
+// --------------------------------------------------
+const Wallet = ({ className }) => (
+  <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+    <path
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth={2}
+      d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"
+    />
+  </svg>
+);
+
+const CalendarIcon = ({ className }) => (
+  <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+    <path
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth={2}
+      d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
+    />
+  </svg>
+);
+
+const Clock = ({ className }) => (
+  <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+    <path
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth={2}
+      d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+    />
+  </svg>
+);
+
+const DollarSign = ({ className }) => (
+  <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+    <path
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth={2}
+      d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+    />
+  </svg>
+);
+
+const CheckCircle2 = ({ className }) => (
+  <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+    <path
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth={2}
+      d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+    />
+  </svg>
+);
+
+const XCircle = ({ className }) => (
+  <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+    <path
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth={2}
+      d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z"
+    />
+  </svg>
+);
+
+const AlertCircle = ({ className }) => (
+  <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+    <path
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth={2}
+      d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+    />
+  </svg>
+);
+
+const TrendingUp = ({ className }) => (
+  <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+    <path
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth={2}
+      d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"
+    />
+  </svg>
+);
+
+const DownloadIcon = ({ className }) => (
+  <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+    <path
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth={2}
+      d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
+    />
+  </svg>
+);
+
+const SearchIcon = ({ className }) => (
+  <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+    <path
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth={2}
+      d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+    />
+  </svg>
+);
+
+const Plus = ({ className }) => (
+  <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+  </svg>
+);
+
+const Eye = ({ className }) => (
+  <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+    <path
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth={2}
+      d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+    />
+    <path
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth={2}
+      d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"
+    />
+  </svg>
+);
+
+// --------------------------------------------------
+// Main Page – AdminPayoutManagement
+// --------------------------------------------------
+
+const AdminPayoutManagement = () => {
+  const [activeTab, setActiveTab] = useState("pending");
+  const [isCreateBatchOpen, setIsCreateBatchOpen] = useState(false);
+  const [isReviewOpen, setIsReviewOpen] = useState(false);
+  const [isBatchDetailsOpen, setIsBatchDetailsOpen] = useState(false);
+  const [selectedRequest, setSelectedRequest] = useState(null);
+  const [selectedBatch, setSelectedBatch] = useState(null);
+  const [rejectionReason, setRejectionReason] = useState("");
+  const [searchTerm, setSearchTerm] = useState("");
+  const [filterType, setFilterType] = useState("All"); // All | Commission | Bonus
+
+  // ---------------- Mock JSON data -----------------
+  const [pendingCommissions] = useState([
+    {
+      id: "COMM001",
+      workOrderId: "WO-2025-001",
+      technicianId: "TECH001",
+      technicianName: "Mike Johnson",
+      employmentType: "Freelancer",
+      type: "Commission",
+      amount: 50.0,
+      paymentDate: "2025-11-05",
+      customerName: "Ahmed Hassan",
+      serviceCategory: "AC Service",
+      paymentAmount: 500.0,
+      rate: 10,
+    },
+    {
+      id: "COMM002",
+      workOrderId: "WO-2025-003",
+      technicianId: "TECH002",
+      technicianName: "Sarah Davis",
+      employmentType: "Internal Employee",
+      type: "Bonus",
+      amount: 25.0,
+      paymentDate: "2025-11-05",
+      customerName: "Fatima Ali",
+      serviceCategory: "Plumbing",
+      paymentAmount: 500.0,
+      rate: 5,
+    },
+    {
+      id: "COMM003",
+      workOrderId: "WO-2025-005",
+      technicianId: "TECH001",
+      technicianName: "Mike Johnson",
+      employmentType: "Freelancer",
+      type: "Commission",
+      amount: 40.0,
+      paymentDate: "2025-11-06",
+      customerName: "Mohammed Khalid",
+      serviceCategory: "Electrical",
+      paymentAmount: 400.0,
+      rate: 10,
+    },
+    {
+      id: "COMM004",
+      workOrderId: "WO-2025-007",
+      technicianId: "TECH003",
+      technicianName: "John Smith",
+      employmentType: "Freelancer",
+      type: "Commission",
+      amount: 60.0,
+      paymentDate: "2025-11-07",
+      customerName: "Sara Ahmed",
+      serviceCategory: "Carpentry",
+      paymentAmount: 600.0,
+      rate: 10,
+    },
+  ]);
+
+  const [earlyPayoutRequests, setEarlyPayoutRequests] = useState([
+    {
+      id: "EPR001",
+      technicianId: "TECH001",
+      technicianName: "Mike Johnson",
+      requestDate: "2025-11-07",
+      requestedAmount: 90.0,
+      commissionIds: ["COMM001", "COMM003"],
+      reason: "Need urgent funds for personal emergency",
+      status: "Pending",
+    },
+    {
+      id: "EPR002",
+      technicianId: "TECH003",
+      technicianName: "John Smith",
+      requestDate: "2025-11-06",
+      requestedAmount: 60.0,
+      commissionIds: ["COMM004"],
+      reason: "Medical expenses",
+      status: "Pending",
+    },
+  ]);
+
+  const [payoutBatches, setPayoutBatches] = useState([
+    {
+      id: "BATCH001",
+      batchNumber: "BATCH-2025-W44",
+      createdDate: "2025-11-01",
+      payoutDate: "2025-11-04",
+      totalAmount: 850.0,
+      technicianCount: 5,
+      commissionsCount: 12,
+      status: "Paid",
+      confirmedBy: "Admin User",
+      confirmedDate: "2025-11-01",
+      paidBy: "Admin User",
+      paidDate: "2025-11-04",
+      payouts: [
+        {
+          technicianId: "TECH001",
+          technicianName: "Mike Johnson",
+          employmentType: "Freelancer",
+          amount: 320.0,
+          commissionsCount: 4,
+          commissionIds: ["C001", "C002", "C003", "C004"],
+        },
+        {
+          technicianId: "TECH002",
+          technicianName: "Sarah Davis",
+          employmentType: "Internal Employee",
+          amount: 180.0,
+          commissionsCount: 3,
+          commissionIds: ["B001", "B002", "B003"],
+        },
+      ],
+    },
+  ]);
+
+  const [payoutHistory] = useState([
+    {
+      id: "PH001",
+      payoutId: "BATCH001-P001",
+      workOrderId: "WO-2025-001",
+      technicianId: "TECH001",
+      technicianName: "Mike Johnson",
+      type: "Commission",
+      amount: 80.0,
+      paymentDate: "2025-10-28",
+      payoutDate: "2025-11-04",
+      batchNumber: "BATCH-2025-W44",
+      status: "Paid",
+      paidBy: "Admin User",
+    },
+    {
+      id: "PH002",
+      payoutId: "BATCH001-P002",
+      workOrderId: "WO-2025-002",
+      technicianId: "TECH002",
+      technicianName: "Sarah Davis",
+      type: "Bonus",
+      amount: 60.0,
+      paymentDate: "2025-10-29",
+      payoutDate: "2025-11-04",
+      batchNumber: "BATCH-2025-W44",
+      status: "Paid",
+      paidBy: "Admin User",
+    },
+  ]);
+
+  // ----------------- helpers & stats ----------------
+  const totalPendingAmount = pendingCommissions.reduce(
+    (sum, c) => sum + c.amount,
+    0
+  );
+  const totalPendingRequests = earlyPayoutRequests.filter(
+    (r) => r.status === "Pending"
+  ).length;
+  const totalEarlyPayoutAmount = earlyPayoutRequests
+    .filter((r) => r.status === "Pending")
+    .reduce((sum, r) => sum + r.requestedAmount, 0);
+
+  const getNextMonday = () => {
+    const today = new Date();
+    const daysUntilMonday = ((8 - today.getDay()) % 7) || 7;
+    const nextMonday = new Date(today);
+    nextMonday.setDate(today.getDate() + daysUntilMonday);
+    return nextMonday.toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    });
+  };
+
+  const filteredPendingCommissions = pendingCommissions.filter((comm) => {
+    const q = searchTerm.toLowerCase();
+    const matchName =
+      comm.technicianName.toLowerCase().includes(q) ||
+      comm.workOrderId.toLowerCase().includes(q);
+
+    const matchType =
+      filterType === "All" ? true : comm.type === filterType;
+
+    return matchName && matchType;
+  });
+
+  // ----------------- actions (SweetAlert) ----------------
+  const handleCreateBatch = () => {
+    if (!pendingCommissions.length) {
+      Swal.fire("No data", "No pending commissions for payout", "warning");
+      return;
+    }
+
+    const map = new Map();
+    pendingCommissions.forEach((c) => {
+      if (!map.has(c.technicianId)) {
+        map.set(c.technicianId, {
+          technicianId: c.technicianId,
+          technicianName: c.technicianName,
+          employmentType: c.employmentType,
+          amount: 0,
+          commissionsCount: 0,
+          commissionIds: [],
+        });
+      }
+      const obj = map.get(c.technicianId);
+      obj.amount += c.amount;
+      obj.commissionsCount += 1;
+      obj.commissionIds.push(c.id);
+    });
+
+    const newBatch = {
+      id: `BATCH${String(payoutBatches.length + 1).padStart(3, "0")}`,
+      batchNumber: `BATCH-2025-W${String(45 + payoutBatches.length)}`,
+      createdDate: new Date().toISOString().split("T")[0],
+      payoutDate: getNextMonday(),
+      totalAmount: totalPendingAmount,
+      technicianCount: map.size,
+      commissionsCount: pendingCommissions.length,
+      status: "Pending",
+      payouts: Array.from(map.values()),
+    };
+
+    setPayoutBatches([newBatch, ...payoutBatches]);
+    setIsCreateBatchOpen(false);
+    Swal.fire(
+      "Batch created",
+      `${newBatch.commissionsCount} commissions, $${newBatch.totalAmount.toFixed(
+        2
+      )} scheduled for ${newBatch.payoutDate}`,
+      "success"
+    );
+  };
+
+  const handleConfirmBatch = (id) => {
+    setPayoutBatches((prev) =>
+      prev.map((b) =>
+        b.id === id
+          ? {
+              ...b,
+              status: "Confirmed",
+              confirmedBy: "Admin User",
+              confirmedDate: new Date().toISOString().split("T")[0],
+            }
+          : b
+      )
+    );
+    Swal.fire("Confirmed", "Payout batch confirmed", "success");
+  };
+
+  const handleMarkPaid = (id) => {
+    setPayoutBatches((prev) =>
+      prev.map((b) =>
+        b.id === id
+          ? {
+              ...b,
+              status: "Paid",
+              paidBy: "Admin User",
+              paidDate: new Date().toISOString().split("T")[0],
+            }
+          : b
+      )
+    );
+    Swal.fire("Paid", "Payout batch marked as paid", "success");
+  };
+
+  const openReviewRequest = (request) => {
+    setSelectedRequest(request);
+    setRejectionReason("");
+    setIsReviewOpen(true);
+  };
+
+  const handleApproveRequest = () => {
+    if (!selectedRequest) return;
+    setEarlyPayoutRequests((prev) =>
+      prev.map((r) =>
+        r.id === selectedRequest.id
+          ? {
+              ...r,
+              status: "Approved",
+              reviewedBy: "Admin User",
+              reviewedDate: new Date().toISOString().split("T")[0],
+            }
+          : r
+      )
+    );
+    setIsReviewOpen(false);
+    Swal.fire(
+      "Approved",
+      `$${selectedRequest.requestedAmount.toFixed(
+        2
+      )} approved for ${selectedRequest.technicianName}`,
+      "success"
+    );
+  };
+
+  const handleRejectRequest = () => {
+    if (!selectedRequest) return;
+    if (!rejectionReason.trim()) {
+      Swal.fire("Required", "Please enter a rejection reason", "error");
+      return;
+    }
+    setEarlyPayoutRequests((prev) =>
+      prev.map((r) =>
+        r.id === selectedRequest.id
+          ? {
+              ...r,
+              status: "Rejected",
+              reviewedBy: "Admin User",
+              reviewedDate: new Date().toISOString().split("T")[0],
+              rejectionReason,
+            }
+          : r
+      )
+    );
+    setIsReviewOpen(false);
+    Swal.fire("Rejected", "Early payout request rejected", "success");
+  };
+
+  const openBatchDetails = (batch) => {
+    setSelectedBatch(batch);
+    setIsBatchDetailsOpen(true);
+  };
+
+  // --------------------------------------------------
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div>
+        <h1 className="text-2xl font-semibold text-gray-900">
+          Payout Management
+        </h1>
+        <p className="text-sm text-gray-600 mt-1">
+          Manage commission &amp; bonus payouts with weekly batches and early
+          payout requests.
+        </p>
+      </div>
+
+      {/* Stats */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <Card>
+          <CardContent className="py-5">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-600">Pending Commissions</p>
+                <p className="text-2xl font-semibold text-[#c20001] mt-1">
+                  ${totalPendingAmount.toFixed(2)}
+                </p>
+                <p className="text-xs text-gray-500 mt-1">
+                  {pendingCommissions.length} items
+                </p>
+              </div>
+              <div className="h-12 w-12 rounded-full bg-red-50 flex items-center justify-center">
+                <Wallet className="h-6 w-6 text-[#c20001]" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="py-5">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-600">Early Payout Requests</p>
+                <p className="text-2xl font-semibold text-[#ffb111] mt-1">
+                  {totalPendingRequests}
+                </p>
+                <p className="text-xs text-gray-500 mt-1">
+                  ${totalEarlyPayoutAmount.toFixed(2)}
+                </p>
+              </div>
+              <div className="h-12 w-12 rounded-full bg-yellow-50 flex items-center justify-center">
+                <Clock className="h-6 w-6 text-[#ffb111]" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="py-5">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-600">Next Payout Date</p>
+                <p className="text-xl font-semibold text-gray-900 mt-1">
+                  {getNextMonday()}
+                </p>
+                <p className="text-xs text-gray-500 mt-1">Weekly Monday</p>
+              </div>
+              <div className="h-12 w-12 rounded-full bg-blue-50 flex items-center justify-center">
+                <CalendarIcon className="h-6 w-6 text-blue-600" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="py-5">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-600">Total Paid (This Month)</p>
+                <p className="text-2xl font-semibold text-green-600 mt-1">
+                  $850.00
+                </p>
+                <p className="text-xs text-gray-500 mt-1">12 payouts</p>
+              </div>
+              <div className="h-12 w-12 rounded-full bg-green-50 flex items-center justify-center">
+                <TrendingUp className="h-6 w-6 text-green-600" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Tabs header */}
+      <div className="bg-gray-100 rounded-xl inline-flex p-1 text-sm">
+        {[
+          { id: "pending", label: "Pending Commissions" },
+          { id: "requests", label: "Early Payout Requests" },
+          { id: "batches", label: "Payout Batches" },
+          { id: "history", label: "Payout History" },
+        ].map((tab) => (
+          <button
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id)}
+            className={`relative px-4 py-2 rounded-lg flex items-center gap-2 ${
+              activeTab === tab.id
+                ? "bg-white shadow text-gray-900"
+                : "text-gray-600 hover:text-gray-900"
+            }`}
+          >
+            {tab.label}
+            {tab.id === "pending" && pendingCommissions.length > 0 && (
+              <Badge className="bg-[#c20001] text-white">
+                {pendingCommissions.length}
+              </Badge>
+            )}
+            {tab.id === "requests" && totalPendingRequests > 0 && (
+              <Badge className="bg-[#ffb111] text-white">
+                {totalPendingRequests}
+              </Badge>
+            )}
+          </button>
+        ))}
+      </div>
+
+      {/* Pending tab */}
+      {activeTab === "pending" && (
+        <Card>
+          <CardHeader>
+            <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
+              <div>
+                <CardTitle>Pending Commissions &amp; Bonuses</CardTitle>
+                <CardDescription>
+                  Verified payments ready for weekly payout
+                </CardDescription>
+              </div>
+              <Button
+                onClick={() => setIsCreateBatchOpen(true)}
+                disabled={!pendingCommissions.length}
+              >
+                <Plus className="h-4 w-4 mr-1.5" />
+                Create Weekly Batch
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {/* filters */}
+            <div className="flex flex-col sm:flex-row gap-4 mb-4">
+              <div className="relative flex-1">
+                <SearchIcon className="h-4 w-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                <Input
+                  placeholder="Search by technician or work order..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-9"
+                />
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  size="sm"
+                  variant={filterType === "All" ? "solid" : "outline"}
+                  onClick={() => setFilterType("All")}
+                >
+                  All
+                </Button>
+                <Button
+                  size="sm"
+                  variant={filterType === "Commission" ? "solid" : "outline"}
+                  className={
+                    filterType === "Commission"
+                      ? "bg-purple-600 hover:bg-purple-700"
+                      : ""
+                  }
+                  onClick={() => setFilterType("Commission")}
+                >
+                  Commissions
+                </Button>
+                <Button
+                  size="sm"
+                  variant={filterType === "Bonus" ? "solid" : "outline"}
+                  className={
+                    filterType === "Bonus"
+                      ? "bg-blue-600 hover:bg-blue-700"
+                      : ""
+                  }
+                  onClick={() => setFilterType("Bonus")}
+                >
+                  Bonuses
+                </Button>
+              </div>
+            </div>
+
+            {/* table */}
+            <div className="rounded-lg border overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="bg-gray-50 border-b">
+                    <tr>
+                      {[
+                        "Work Order",
+                        "Technician",
+                        "Type",
+                        "Service",
+                        "Payment",
+                        "Rate",
+                        "Amount",
+                        "Date",
+                      ].map((h) => (
+                        <th
+                          key={h}
+                          className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-600"
+                        >
+                          {h}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-100">
+                    {!filteredPendingCommissions.length ? (
+                      <tr>
+                        <td
+                          colSpan={8}
+                          className="px-4 py-8 text-center text-gray-500"
+                        >
+                          No pending commissions found
+                        </td>
+                      </tr>
+                    ) : (
+                      filteredPendingCommissions.map((c) => (
+                        <tr key={c.id} className="hover:bg-gray-50">
+                          <td className="px-4 py-3">{c.workOrderId}</td>
+                          <td className="px-4 py-3">
+                            <div className="text-gray-900">
+                              {c.technicianName}
+                            </div>
+                            <div className="text-xs text-gray-500">
+                              {c.employmentType}
+                            </div>
+                          </td>
+                          <td className="px-4 py-3">
+                            <Badge
+                              className={
+                                c.type === "Commission"
+                                  ? "bg-purple-100 text-purple-700"
+                                  : "bg-blue-100 text-blue-700"
+                              }
+                            >
+                              {c.type}
+                            </Badge>
+                          </td>
+                          <td className="px-4 py-3">{c.serviceCategory}</td>
+                          <td className="px-4 py-3">
+                            ${c.paymentAmount.toFixed(2)}
+                          </td>
+                          <td className="px-4 py-3">{c.rate}%</td>
+                          <td className="px-4 py-3 text-[#c20001]">
+                            ${c.amount.toFixed(2)}
+                          </td>
+                          <td className="px-4 py-3 text-gray-500">
+                            {c.paymentDate}
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {filteredPendingCommissions.length > 0 && (
+              <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-900">
+                <strong>Total pending for payout:</strong>{" "}
+                ${totalPendingAmount.toFixed(2)} across{" "}
+                {pendingCommissions.length} commission
+                {pendingCommissions.length !== 1 ? "s" : ""}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Requests tab */}
+      {activeTab === "requests" && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Early Payout Requests</CardTitle>
+            <CardDescription>
+              Review and approve/reject on-demand payout requests from
+              technicians
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {!earlyPayoutRequests.length ? (
+              <div className="py-8 text-center text-gray-500 text-sm">
+                No early payout requests at the moment
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {earlyPayoutRequests.map((r) => (
+                  <div
+                    key={r.id}
+                    className="border rounded-lg p-4 hover:bg-gray-50"
+                  >
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-3 mb-2">
+                          <h3 className="font-medium text-gray-900">
+                            {r.technicianName}
+                          </h3>
+                          <Badge
+                            className={
+                              r.status === "Pending"
+                                ? "bg-yellow-100 text-yellow-800"
+                                : r.status === "Approved"
+                                ? "bg-green-100 text-green-800"
+                                : "bg-red-100 text-red-800"
+                            }
+                          >
+                            {r.status}
+                          </Badge>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+                          <div>
+                            <span className="text-gray-600">Request Date:</span>
+                            <span className="ml-2 text-gray-900">
+                              {r.requestDate}
+                            </span>
+                          </div>
+                          <div>
+                            <span className="text-gray-600">
+                              Requested Amount:
+                            </span>
+                            <span className="ml-2 text-[#c20001]">
+                              ${r.requestedAmount.toFixed(2)}
+                            </span>
+                          </div>
+                          <div>
+                            <span className="text-gray-600">
+                              Commission IDs:
+                            </span>
+                            <span className="ml-2 text-gray-900">
+                              {r.commissionIds.join(", ")}
+                            </span>
+                          </div>
+                          <div>
+                            <span className="text-gray-600">
+                              Commissions Count:
+                            </span>
+                            <span className="ml-2 text-gray-900">
+                              {r.commissionIds.length}
+                            </span>
+                          </div>
+                        </div>
+                        <div className="mt-3 p-3 bg-gray-50 border border-gray-200 rounded">
+                          <p className="text-sm text-gray-600">Reason:</p>
+                          <p className="mt-1 text-sm text-gray-900">
+                            {r.reason}
+                          </p>
+                        </div>
+                        {r.status === "Rejected" && r.rejectionReason && (
+                          <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded">
+                            <p className="text-sm text-red-600">
+                              Rejection Reason:
+                            </p>
+                            <p className="mt-1 text-sm text-red-900">
+                              {r.rejectionReason}
+                            </p>
+                          </div>
+                        )}
+                        {r.reviewedBy && (
+                          <p className="mt-2 text-xs text-gray-500">
+                            Reviewed by {r.reviewedBy} on {r.reviewedDate}
+                          </p>
+                        )}
+                      </div>
+
+                      {r.status === "Pending" && (
+                        <Button
+                          size="sm"
+                          onClick={() => openReviewRequest(r)}
+                        >
+                          Review
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Batches tab */}
+      {activeTab === "batches" && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Payout Batches</CardTitle>
+            <CardDescription>
+              Weekly payout batches scheduled for every Monday
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {!payoutBatches.length ? (
+              <div className="py-8 text-center text-gray-500 text-sm">
+                No payout batches created yet
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {payoutBatches.map((b) => (
+                  <div
+                    key={b.id}
+                    className="border rounded-lg p-4 hover:bg-gray-50"
+                  >
+                    <div className="flex items-start justify-between mb-3">
+                      <div>
+                        <h3 className="font-medium text-gray-900">
+                          {b.batchNumber}
+                        </h3>
+                        <p className="text-sm text-gray-600">
+                          Created: {b.createdDate}
+                        </p>
+                      </div>
+                      <Badge
+                        className={
+                          b.status === "Pending"
+                            ? "bg-yellow-100 text-yellow-800"
+                            : b.status === "Confirmed"
+                            ? "bg-blue-100 text-blue-800"
+                            : "bg-green-100 text-green-800"
+                        }
+                      >
+                        {b.status}
+                      </Badge>
+                    </div>
+
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-3 text-sm">
+                      <div>
+                        <p className="text-xs text-gray-600">Payout Date</p>
+                        <p className="text-gray-900">{b.payoutDate}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-gray-600">Total Amount</p>
+                        <p className="text-[#c20001]">
+                          ${b.totalAmount.toFixed(2)}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-gray-600">Technicians</p>
+                        <p className="text-gray-900">{b.technicianCount}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-gray-600">Commissions</p>
+                        <p className="text-gray-900">{b.commissionsCount}</p>
+                      </div>
+                    </div>
+
+                    {b.confirmedBy && (
+                      <p className="text-xs text-gray-500 mb-1">
+                        Confirmed by {b.confirmedBy} on {b.confirmedDate}
+                      </p>
+                    )}
+                    {b.paidBy && (
+                      <p className="text-xs text-gray-500 mb-2">
+                        Paid by {b.paidBy} on {b.paidDate}
+                      </p>
+                    )}
+
+                    <div className="flex flex-wrap gap-2 mt-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => openBatchDetails(b)}
+                      >
+                        <Eye className="h-4 w-4 mr-1.5" />
+                        View Details
+                      </Button>
+                      {b.status === "Pending" && (
+                        <Button
+                          size="sm"
+                          className="bg-blue-600 hover:bg-blue-700"
+                          onClick={() => handleConfirmBatch(b.id)}
+                        >
+                          <CheckCircle2 className="h-4 w-4 mr-1.5" />
+                          Confirm Batch
+                        </Button>
+                      )}
+                      {b.status === "Confirmed" && (
+                        <Button
+                          size="sm"
+                          className="bg-green-600 hover:bg-green-700"
+                          onClick={() => handleMarkPaid(b.id)}
+                        >
+                          <DollarSign className="h-4 w-4 mr-1.5" />
+                          Mark as Paid
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* History tab */}
+      {activeTab === "history" && (
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle>Payout History</CardTitle>
+                <CardDescription>
+                  Complete audit trail of all processed payouts
+                </CardDescription>
+              </div>
+              <Button size="sm" variant="outline">
+                <DownloadIcon className="h-4 w-4 mr-1.5" />
+                Export
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="rounded-lg border overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="bg-gray-50 border-b">
+                    <tr>
+                      {[
+                        "Payout ID",
+                        "Work Order",
+                        "Technician",
+                        "Type",
+                        "Amount",
+                        "Payment Date",
+                        "Payout Date",
+                        "Batch",
+                        "Status",
+                      ].map((h) => (
+                        <th
+                          key={h}
+                          className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-600"
+                        >
+                          {h}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-100">
+                    {!payoutHistory.length ? (
+                      <tr>
+                        <td
+                          colSpan={9}
+                          className="px-4 py-8 text-center text-gray-500"
+                        >
+                          No payout history available
+                        </td>
+                      </tr>
+                    ) : (
+                      payoutHistory.map((p) => (
+                        <tr key={p.id} className="hover:bg-gray-50">
+                          <td className="px-4 py-3">{p.payoutId}</td>
+                          <td className="px-4 py-3">{p.workOrderId}</td>
+                          <td className="px-4 py-3">{p.technicianName}</td>
+                          <td className="px-4 py-3">
+                            <Badge
+                              className={
+                                p.type === "Commission"
+                                  ? "bg-purple-100 text-purple-700"
+                                  : "bg-blue-100 text-blue-700"
+                              }
+                            >
+                              {p.type}
+                            </Badge>
+                          </td>
+                          <td className="px-4 py-3 text-[#c20001]">
+                            ${p.amount.toFixed(2)}
+                          </td>
+                          <td className="px-4 py-3 text-gray-500">
+                            {p.paymentDate}
+                          </td>
+                          <td className="px-4 py-3 text-gray-500">
+                            {p.payoutDate}
+                          </td>
+                          <td className="px-4 py-3">{p.batchNumber}</td>
+                          <td className="px-4 py-3">
+                            <Badge className="bg-green-100 text-green-700">
+                              <CheckCircle2 className="h-3 w-3 mr-1" />
+                              {p.status}
+                            </Badge>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* ---------- Create Batch Modal ---------- */}
+      <Modal
+        open={isCreateBatchOpen}
+        onClose={() => setIsCreateBatchOpen(false)}
+        maxWidth="max-w-2xl"
+      >
+        <h2 className="text-lg font-semibold text-gray-900 mb-1">
+          Create Weekly Payout Batch
+        </h2>
+        <p className="text-sm text-gray-500 mb-4">
+          Create a new payout batch for all pending commissions and bonuses.
+        </p>
+
+        <div className="mb-4 flex items-start gap-3 p-3 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-900">
+          <CalendarIcon className="h-5 w-5 mt-0.5" />
+          <p>
+            This batch will be scheduled for payout on{" "}
+            <strong>{getNextMonday()}</strong> (next Monday).
+          </p>
+        </div>
+
+        <div className="grid grid-cols-2 gap-4 mb-4">
+          <div className="p-4 bg-gray-50 border rounded-lg">
+            <p className="text-sm text-gray-600">Total Amount</p>
+            <p className="mt-1 text-2xl font-semibold text-[#c20001]">
+              ${totalPendingAmount.toFixed(2)}
+            </p>
+          </div>
+          <div className="p-4 bg-gray-50 border rounded-lg">
+            <p className="text-sm text-gray-600">Commissions</p>
+            <p className="mt-1 text-2xl font-semibold text-gray-900">
+              {pendingCommissions.length}
+            </p>
+          </div>
+        </div>
+
+        <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg text-sm text-yellow-900 mb-5">
+          <div className="flex items-start gap-2">
+            <AlertCircle className="h-4 w-4 mt-0.5" />
+            <p>
+              Once created, the batch can be reviewed and confirmed. After
+              confirmation you can mark it as paid on the payout date. Each
+              commission will be paid only once.
+            </p>
+          </div>
+        </div>
+
+        <div className="flex justify-end gap-2">
+          <Button
+            variant="outline"
+            onClick={() => setIsCreateBatchOpen(false)}
+          >
+            Cancel
+          </Button>
+          <Button onClick={handleCreateBatch}>Create Batch</Button>
+        </div>
+      </Modal>
+
+      {/* ---------- Review Request Modal ---------- */}
+      <Modal
+        open={isReviewOpen}
+        onClose={() => setIsReviewOpen(false)}
+        maxWidth="max-w-2xl"
+      >
+        <h2 className="text-lg font-semibold text-gray-900 mb-1">
+          Review Early Payout Request
+        </h2>
+        <p className="text-sm text-gray-500 mb-4">
+          Review and approve or reject this early payout request.
+        </p>
+
+        {selectedRequest && (
+          <div className="space-y-4 mb-5">
+            <div className="grid grid-cols-2 gap-4 text-sm">
+              <div>
+                <Label>Technician</Label>
+                <p className="mt-1 text-gray-900">
+                  {selectedRequest.technicianName}
+                </p>
+              </div>
+              <div>
+                <Label>Request Date</Label>
+                <p className="mt-1 text-gray-900">
+                  {selectedRequest.requestDate}
+                </p>
+              </div>
+              <div>
+                <Label>Requested Amount</Label>
+                <p className="mt-1 text-[#c20001]">
+                  ${selectedRequest.requestedAmount.toFixed(2)}
+                </p>
+              </div>
+              <div>
+                <Label>Commissions Count</Label>
+                <p className="mt-1 text-gray-900">
+                  {selectedRequest.commissionIds.length}
+                </p>
+              </div>
+            </div>
+
+            <div>
+              <Label>Commission IDs</Label>
+              <p className="mt-1 text-sm text-gray-900">
+                {selectedRequest.commissionIds.join(", ")}
+              </p>
+            </div>
+
+            <div>
+              <Label>Reason for Early Payout</Label>
+              <div className="mt-1 p-3 bg-gray-50 border rounded text-sm text-gray-900">
+                {selectedRequest.reason}
+              </div>
+            </div>
+
+            <div>
+              <Label>Rejection Reason (if rejecting)</Label>
+              <Textarea
+                rows={3}
+                value={rejectionReason}
+                onChange={(e) => setRejectionReason(e.target.value)}
+                placeholder="Enter reason for rejection..."
+              />
+            </div>
+
+            <div className="p-3 rounded-lg bg-yellow-50 border border-yellow-200 text-sm text-yellow-900">
+              <div className="flex items-start gap-2">
+                <AlertCircle className="h-4 w-4 mt-0.5" />
+                <p>
+                  If approved, this payout will be processed immediately and
+                  marked as paid. The commissions will be removed from the weekly
+                  batch cycle.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        <div className="flex justify-end gap-2">
+          <Button variant="outline" onClick={() => setIsReviewOpen(false)}>
+            Cancel
+          </Button>
+          <Button
+            variant="outline"
+            className="border-red-600 text-red-600 hover:bg-red-50"
+            onClick={handleRejectRequest}
+          >
+            <XCircle className="h-4 w-4 mr-1.5" />
+            Reject
+          </Button>
+          <Button
+            className="bg-green-600 hover:bg-green-700"
+            onClick={handleApproveRequest}
+          >
+            <CheckCircle2 className="h-4 w-4 mr-1.5" />
+            Approve &amp; Pay
+          </Button>
+        </div>
+      </Modal>
+
+      {/* ---------- Batch Details Modal ---------- */}
+      <Modal
+        open={isBatchDetailsOpen}
+        onClose={() => setIsBatchDetailsOpen(false)}
+        maxWidth="max-w-3xl"
+      >
+        <h2 className="text-lg font-semibold text-gray-900 mb-1">
+          Payout Batch Details
+        </h2>
+        <p className="text-sm text-gray-500 mb-4">
+          {selectedBatch?.batchNumber || ""}
+        </p>
+
+        {selectedBatch && (
+          <>
+            <div className="grid grid-cols-3 gap-4 mb-4 text-sm">
+              <div className="p-3 bg-gray-50 border rounded-lg">
+                <p className="text-xs text-gray-600">Total Amount</p>
+                <p className="mt-1 text-xl font-semibold text-[#c20001]">
+                  ${selectedBatch.totalAmount.toFixed(2)}
+                </p>
+              </div>
+              <div className="p-3 bg-gray-50 border rounded-lg">
+                <p className="text-xs text-gray-600">Technicians</p>
+                <p className="mt-1 text-xl font-semibold text-gray-900">
+                  {selectedBatch.technicianCount}
+                </p>
+              </div>
+              <div className="p-3 bg-gray-50 border rounded-lg">
+                <p className="text-xs text-gray-600">Commissions</p>
+                <p className="mt-1 text-xl font-semibold text-gray-900">
+                  {selectedBatch.commissionsCount}
+                </p>
+              </div>
+            </div>
+
+            <div>
+              <Label>Payout Breakdown by Technician</Label>
+              <div className="mt-2 rounded-lg border overflow-hidden">
+                <table className="w-full text-sm">
+                  <thead className="bg-gray-50 border-b">
+                    <tr>
+                      {["Technician", "Type", "Amount", "Commissions"].map(
+                        (h) => (
+                          <th
+                            key={h}
+                            className="px-4 py-2 text-left text-xs font-semibold uppercase tracking-wide text-gray-600"
+                          >
+                            {h}
+                          </th>
+                        )
+                      )}
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-100">
+                    {selectedBatch.payouts.map((p, idx) => (
+                      <tr key={idx}>
+                        <td className="px-4 py-3 text-gray-900">
+                          {p.technicianName}
+                        </td>
+                        <td className="px-4 py-3 text-xs text-gray-600">
+                          {p.employmentType}
+                        </td>
+                        <td className="px-4 py-3 text-[#c20001]">
+                          ${p.amount.toFixed(2)}
+                        </td>
+                        <td className="px-4 py-3 text-gray-900">
+                          {p.commissionsCount}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </>
+        )}
+
+        <div className="flex justify-end gap-2 mt-5">
+          <Button
+            variant="outline"
+            onClick={() => setIsBatchDetailsOpen(false)}
+          >
+            Close
+          </Button>
+          <Button variant="outline">
+            <DownloadIcon className="h-4 w-4 mr-1.5" />
+            Export PDF
+          </Button>
+        </div>
+      </Modal>
+    </div>
+  );
+};
+
+export default AdminPayoutManagement;

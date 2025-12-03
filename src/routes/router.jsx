@@ -18,13 +18,20 @@ import DispatcherWorkOrders from "../pages/dispatcher/DispatcherWorkOrders";
 import DispatcherTechnicians from '../pages/dispatcher/DispatcherTechnicians';
 import DispatcherPayments from "../pages/dispatcher/DispatcherPayments";
 
-import AdminDashboard from "../pages/administrator/Dashboard";
+
+import AdminOverviewPage from "../pages/administrator/AdminOverviewPage";
 import AdminWorkOrders from "../pages/administrator/AdminWorkOrders";
 import AdminPaymentsPage from "../pages/administrator/AdminPaymentsPage";
-// import AdminTechniciansPage from "../pages/administrator/AdminTechniciansPage";
+import AdminTechniciansPage from "../pages/administrator/AdminTechniciansPage";
 
 import ProtectedRoute from "./ProtectedRoute";
 import TechnicianMapView from "../pages/dispatcher/TechnicianMapView";
+import AdminPayoutManagement from "../pages/administrator/AdminPayoutManagement";
+import AdminReportsPage from "../pages/administrator/AdminReportsPage";
+import AdminAuditLogPage from "../pages/administrator/AdminAuditLogPage";
+import AdminUserManagementPage from "../pages/administrator/AdminUserManagementPage";
+import AdminCategoriesManagementPage from "../pages/administrator/AdminCategoriesManagementPage";
+import AdminCommissionRatesPage from "../pages/administrator/AdminCommissionRatesPage";
 
 const Router = createBrowserRouter([
   {
@@ -83,10 +90,17 @@ const Router = createBrowserRouter([
       </ProtectedRoute>
     ),
     children: [
-      { path: "overview", element: <AdminDashboard /> },
+      { path: "overview", element: <AdminOverviewPage /> },
+      { path: "service-requests", element: <DispatcherServiceRequests /> },
       { path: "work-orders", element: <AdminWorkOrders /> },
       { path: "payments", element: <AdminPaymentsPage /> },
-      // { path: "technicians", element: <AdminTechniciansPage /> }
+      { path: "payout-management", element: <AdminPayoutManagement /> },
+      { path: "technicians", element: <AdminTechniciansPage /> },
+      { path: "reports", element: <AdminReportsPage/> },
+      { path: "audit-log", element: <AdminAuditLogPage/> },
+      { path: "user-management", element: <AdminUserManagementPage/> },
+      { path: "categories-services", element: <AdminCategoriesManagementPage/> },
+      { path: "commission-bonus", element: <AdminCommissionRatesPage/> },
     ],
   },
 ]);

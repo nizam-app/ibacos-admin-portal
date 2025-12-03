@@ -21,4 +21,4 @@ const DispatcherAPI = {
     axiosClient.patch(`/wos/${woId}/cancel`, body),
 };
 
-export default DispatcherAPI;   
+export default DispatcherAPI;
