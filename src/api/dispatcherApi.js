@@ -2,23 +2,37 @@
 import axiosClient from "./axiosClient";
 
 const DispatcherAPI = {
-  // 👇 work orders list
+  // 🔹 Work order list
   getWorkOrders: (params = {}) =>
     axiosClient.get("/wos", {
-      // TODO: jodi real route onno rokom hoy, ekhane change korbi
-      params,
+      params, // { status, page, limit }
     }),
 
-  getNearbyTechnicians: ({ latitude, longitude, maxDistance = 50, status }) =>
-    axiosClient.get("/technicians/nearby", {
+  // 🔹 Single WO details
+  getWorkOrderById: (woId) => axiosClient.get(`/wos/${woId}`),
+
+  // 🔹 Reassign technician
+  reassignWorkOrder: (woId, body) =>
+    axiosClient.patch(`/wos/${woId}/reassign`, body), // { technicianId, reason }
+
+  // 🔹 Cancel WO
+  cancelWorkOrder: (woId, body) =>
+    axiosClient.patch(`/wos/${woId}/cancel`, body), // { reason }
+
+  // 🔹 Reschedule WO
+  rescheduleWorkOrder: (woId, body) =>
+    axiosClient.patch(`/wos/${woId}/reschedule`, body), // { scheduledDate, scheduledTime, estimatedDuration, notes }
+
+  // 🔹 Nearby technicians for a job (dispatcher)
+  getNearbyTechnicians: ({
+    latitude,
+    longitude,
+    maxDistance = 50,
+    status = "ONLINE",
+  }) =>
+    axiosClient.get("/dispatcher/technicians/nearby", {
       params: { latitude, longitude, maxDistance, status },
     }),
-
-  reassignWorkOrder: (woId, body) =>
-    axiosClient.patch(`/wos/${woId}/reassign`, body),
-
-  cancelWorkOrder: (woId, body) =>
-    axiosClient.patch(`/wos/${woId}/cancel`, body),
 };
 
 export default DispatcherAPI;

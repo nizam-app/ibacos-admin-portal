@@ -1,5 +1,13 @@
+// src/pages/dispatcher/WorkOrderActionsModal.jsx
 import React, { useState } from "react";
-import { Calendar, Clock, User, XCircle, MapPin, AlertCircle } from "lucide-react";
+import {
+  Calendar,
+  Clock,
+  User,
+  XCircle,
+  MapPin,
+  AlertCircle,
+} from "lucide-react";
 
 /* Small helper */
 const Badge = ({ className = "", children }) => (
@@ -33,7 +41,7 @@ function WorkOrderActionsModal({
 
   const filteredTechs = technicians
     .filter((t) => !blockedTechnicians.includes(t.id))
-    .sort((a, b) => a.distance - b.distance);
+    .sort((a, b) => (a.distance || 0) - (b.distance || 0));
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -53,14 +61,12 @@ function WorkOrderActionsModal({
   };
 
   const titleMap = {
-    assign: "Assign Work Order",
     reassign: "Reassign Work Order",
     reschedule: "Reschedule Work Order",
     cancel: "Cancel Work Order",
   };
 
   const descriptionMap = {
-    assign: "Assign a technician to this work order.",
     reassign: "Change the assigned technician or schedule.",
     reschedule: "Change the scheduled date and time.",
     cancel:
@@ -102,7 +108,9 @@ function WorkOrderActionsModal({
           <div className="grid grid-cols-2 gap-4">
             <div>
               <p className="text-xs text-gray-500">Work Order ID</p>
-              <p className="font-medium text-[#c20001]">{workOrder.id}</p>
+              <p className="font-medium text-[#c20001]">
+                {workOrder.woNumber || workOrder.id}
+              </p>
             </div>
             <div>
               <p className="text-xs text-gray-500">Service Request</p>
@@ -159,14 +167,12 @@ function WorkOrderActionsModal({
             </>
           ) : (
             <>
-              {/* Technician list (assign / reassign) */}
-              {action !== "reschedule" && (
+              {/* Technician list (reassign) */}
+              {action === "reassign" && (
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
                     <label className="text-sm font-medium text-gray-700">
-                      {action === "reassign"
-                        ? "Reassign to Technician *"
-                        : "Assign Technician *"}
+                      Reassign Technician *
                     </label>
                     <p className="text-xs text-gray-500">
                       Sorted by distance (nearest first)
@@ -174,8 +180,10 @@ function WorkOrderActionsModal({
                   </div>
 
                   {filteredTechs.length === 0 ? (
-                    <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
-                      No technicians available. All are blocked.
+                    <div className="rounded-lg border border-yellow-200 bg-yellow-50 p-3 text-sm text-yellow-800">
+                      {blockedTechnicians.length > 0
+                        ? "No technicians available. All are blocked."
+                        : "No nearby technicians found for this job location."}
                     </div>
                   ) : (
                     <div className="max-h-64 overflow-y-auto rounded-lg border">
@@ -196,7 +204,13 @@ function WorkOrderActionsModal({
                             </p>
                             <p className="text-xs text-gray-500">
                               <MapPin className="mr-1 inline-block h-3 w-3" />
-                              {tech.distance} km • {tech.type}
+                              {tech.distanceKm ||
+                                `${
+                                  tech.distance != null
+                                    ? tech.distance.toFixed(2)
+                                    : "-"
+                                } km`}{" "}
+                              • {tech.type}
                             </p>
                           </div>
                           <Badge
@@ -318,9 +332,7 @@ function WorkOrderActionsModal({
               ? "Confirm Cancellation"
               : action === "reschedule"
               ? "Save Schedule"
-              : action === "reassign"
-              ? "Update Work Order"
-              : "Assign Work Order"}
+              : "Update Work Order"}
           </button>
         </div>
       </div>

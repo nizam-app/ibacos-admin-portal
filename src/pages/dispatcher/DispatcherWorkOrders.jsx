@@ -1,194 +1,19 @@
-import React, { useState } from "react";
+// src/pages/dispatcher/DispatcherWorkOrders.jsx
+import React, { useEffect, useMemo, useState } from "react";
 import Swal from "sweetalert2";
 import {
   Calendar,
   Clock,
   User,
-  UserCheck,
   RefreshCw,
   XCircle,
   Search,
   DollarSign,
 } from "lucide-react";
 
+import DispatcherAPI from "../../api/dispatcherApi";
 import WorkOrderActionsModal from "./WorkOrderActionsModal";
 import PaymentVerificationModal from "./PaymentVerificationModal";
-
-/* ------------------------------------------------------------------
-   MOCK DATA
--------------------------------------------------------------------*/
-
-const MOCK_TECHNICIANS = [
-  {
-    id: "TECH001",
-    name: "Mike Johnson",
-    specialty: "Electrical",
-    type: "Freelancer",
-    commissionRate: 10,
-    distance: 2.3,
-    status: "Available",
-    openJobs: [],
-  },
-  {
-    id: "TECH002",
-    name: "Sarah Davis",
-    specialty: "Plumbing",
-    type: "Internal Employee",
-    bonusRate: 5,
-    distance: 4.7,
-    status: "Busy",
-    openJobs: [
-      {
-        woId: "WO0008",
-        status: "In Progress",
-        scheduledDate: "2024-12-01",
-        scheduledTime: "11:00",
-      },
-      {
-        woId: "WO0012",
-        status: "Assigned",
-        scheduledDate: "2024-12-01",
-        scheduledTime: "15:30",
-      },
-    ],
-  },
-  {
-    id: "TECH003",
-    name: "Robert Chen",
-    specialty: "HVAC",
-    type: "Freelancer",
-    commissionRate: 12,
-    distance: 6.1,
-    status: "Busy",
-    openJobs: [
-      {
-        woId: "WO0010",
-        status: "In Progress",
-        scheduledDate: "2024-12-01",
-        scheduledTime: "10:00",
-      },
-    ],
-  },
-  {
-    id: "TECH004",
-    name: "Lisa Martinez",
-    specialty: "General",
-    type: "Internal Employee",
-    bonusRate: 6,
-    distance: 8.2,
-    status: "Available",
-    openJobs: [],
-  },
-];
-
-const MOCK_WORK_ORDERS = [
-  {
-    id: "WO0007",
-    srId: "SR-1021",
-    customerName: "Abdi Hassan",
-    category: "Electrical – Lighting",
-    status: "Pending",
-    scheduledDate: "2024-12-01",
-    scheduledTime: "10:30",
-    assignedTechnician: null,
-    estimatedDuration: "2",
-    priority: "High",
-    notes: "Customer prefers morning visit.",
-    paymentRecord: null,
-  },
-  {
-    id: "WO0008",
-    srId: "SR-1022",
-    customerName: "Maria Gomez",
-    category: "Plumbing – Leak repair",
-    status: "Assigned",
-    scheduledDate: "2024-12-01",
-    scheduledTime: "14:00",
-    assignedTechnician: "TECH002",
-    estimatedDuration: "3",
-    priority: "Medium",
-    notes: "",
-    paymentRecord: null,
-  },
-  {
-    id: "WO0009",
-    srId: "SR-1023",
-    customerName: "John Smith",
-    category: "HVAC – AC service",
-    status: "In Progress",
-    scheduledDate: "2024-11-30",
-    scheduledTime: "16:30",
-    assignedTechnician: "TECH003",
-    estimatedDuration: "4",
-    priority: "High",
-    notes: "Urgent – AC not cooling.",
-    paymentRecord: null,
-  },
-  {
-    id: "WO0010",
-    srId: "SR-1024",
-    customerName: "Amina Ali",
-    category: "General – Inspection",
-    status: "Completed",
-    scheduledDate: "2024-11-29",
-    scheduledTime: "09:30",
-    assignedTechnician: "TECH001",
-    estimatedDuration: "1",
-    priority: "Low",
-    notes: "",
-    paymentRecord: {
-      paymentStatus: "Proof Uploaded",
-      paymentProof: {
-        uploadedBy: "Mike Johnson",
-        uploadDate: "2024-11-29",
-        paymentMethod: "Cash",
-        amount: 120,
-        proofImageUrl:
-          "https://via.placeholder.com/600x400.png?text=Payment+Receipt",
-        notes: "Customer paid full amount in cash.",
-      },
-      commissionAmount: null,
-      commissionBooked: false,
-      commissionPaid: false,
-      commissionBookedDate: null,
-      verifiedBy: null,
-      verifiedDate: null,
-      rejectionReason: null,
-    },
-  },
-  {
-    id: "WO0011",
-    srId: "SR-1025",
-    customerName: "Karim Hussein",
-    category: "Electrical – Socket",
-    status: "Completed",
-    scheduledDate: "2024-11-28",
-    scheduledTime: "13:00",
-    assignedTechnician: "TECH004",
-    estimatedDuration: "2",
-    priority: "Medium",
-    notes: "",
-    paymentRecord: {
-      paymentStatus: "Verified",
-      paymentProof: {
-        uploadedBy: "Lisa Martinez",
-        uploadDate: "2024-11-28",
-        paymentMethod: "Mobile Money",
-        amount: 80,
-        proofImageUrl:
-          "https://via.placeholder.com/600x400.png?text=MoMo+Screenshot",
-        notes: "",
-      },
-      commissionAmount: 8,
-      commissionBooked: true,
-      commissionPaid: false,
-      commissionBookedDate: "2024-11-28",
-      verifiedBy: "Finance Admin",
-      verifiedDate: "2024-11-28",
-      rejectionReason: null,
-    },
-  },
-];
 
 /* ------------------------------------------------------------------
    SMALL UI HELPERS
@@ -202,64 +27,351 @@ const Badge = ({ className = "", children }) => (
   </span>
 );
 
+/* Mapping helpers */
+
+const mapBackendStatusToLabel = (status) => {
+  switch (status) {
+    case "UNASSIGNED":
+      return "Pending";
+    case "ASSIGNED":
+      return "Assigned";
+    case "IN_PROGRESS":
+      return "In Progress";
+    case "COMPLETED":
+      return "Completed";
+    case "CANCELLED":
+      return "Cancelled";
+    default:
+      return status || "Unknown";
+  }
+};
+
+const mapLabelToBackendStatus = (tabKey) => {
+  switch (tabKey) {
+    case "pending":
+      return "UNASSIGNED";
+    case "assigned":
+      return "ASSIGNED";
+    case "in progress":
+      return "IN_PROGRESS";
+    case "completed":
+      return "COMPLETED";
+    case "cancelled":
+      return "CANCELLED";
+    default:
+      return undefined; // "all" -> no filter
+  }
+};
+
+const mapBackendPriorityToLabel = (priority) => {
+  switch (priority) {
+    case "HIGH":
+      return "High";
+    case "MEDIUM":
+      return "Medium";
+    case "LOW":
+      return "Low";
+    default:
+      return priority || "Medium";
+  }
+};
+
+/* Nearby technician mapper – backend → UI */
+const mapNearbyTech = (t) => ({
+  id: t.id,
+  name: t.name,
+  specialty: t.specialization || "General",
+  type: t.type === "FREELANCER" ? "Freelancer" : "Internal Employee",
+  commissionRate:
+    typeof t.rates?.commissionRate === "number"
+      ? t.rates.commissionRate * 100 // 0.35 → 35
+      : 10,
+  bonusRate:
+    typeof t.rates?.bonusRate === "number" ? t.rates.bonusRate * 100 : 5,
+  distance: t.distance,
+  distanceKm: t.distanceKm,
+  status: t.availability === "AVAILABLE" ? "Available" : "Busy",
+  openJobs: t.openJobs || [],
+});
+
 /* ------------------------------------------------------------------
    MAIN PAGE – DISPATCHER WORK ORDERS
 -------------------------------------------------------------------*/
 
 export default function DispatcherWorkOrders() {
-  const [workOrders, setWorkOrders] = useState(MOCK_WORK_ORDERS);
-  const [technicians] = useState(MOCK_TECHNICIANS);
-  const [blockedTechnicians] = useState(["TECH005"]); // example
+  const [workOrders, setWorkOrders] = useState([]);
+
+  // 🔢 tab counts আলাদা state এ রাখছি
+  const [statusCounts, setStatusCounts] = useState({
+    all: 0,
+    pending: 0,
+    assigned: 0,
+    inProgress: 0,
+    completed: 0,
+    cancelled: 0,
+  });
+
+  const [technicians, setTechnicians] = useState([]);
+  const [blockedTechnicians] = useState([]); // future use
 
   const [selectedWorkOrder, setSelectedWorkOrder] = useState(null);
-  const [currentAction, setCurrentAction] = useState(null); // 'assign' | 'reassign' | 'reschedule' | 'cancel' | 'verifyPayment'
+  const [currentAction, setCurrentAction] = useState(null); // 'reassign' | 'reschedule' | 'cancel' | 'verifyPayment'
   const [searchQuery, setSearchQuery] = useState("");
   const [activeTab, setActiveTab] = useState("all");
 
-  const technicianNameMap = technicians.reduce((acc, t) => {
-    acc[t.id] = t.name;
-    return acc;
-  }, {});
+  const [page, setPage] = useState(1);
+  const [limit] = useState(10);
+  const [total, setTotal] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
+
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  const [techLoading, setTechLoading] = useState(false);
+  const [techError, setTechError] = useState("");
+
+  /* ------------ Fetch helpers ------------- */
+
+  const transformWorkOrder = (wo) => {
+    let scheduledDate = "";
+    let scheduledTime = "";
+    if (wo.scheduledAt) {
+      const d = new Date(wo.scheduledAt);
+      scheduledDate = d.toISOString().split("T")[0];
+      scheduledTime = d.toLocaleTimeString([], {
+        hour: "2-digit",
+        minute: "2-digit",
+      });
+    }
+
+    const estimatedHours =
+      typeof wo.estimatedDuration === "number"
+        ? Math.round(wo.estimatedDuration / 60)
+        : 2;
+
+    const priorityLabel = mapBackendPriorityToLabel(wo.priority);
+    const statusLabel = mapBackendStatusToLabel(wo.status);
+
+    return {
+      id: wo.id,
+      woNumber: wo.woNumber,
+
+      srId: wo.serviceRequest?.srNumber || `SR-${wo.srId}`,
+      customerName: wo.customer?.name || "",
+      category: [
+        wo.category?.name,
+        wo.service?.name,
+        wo.subservice?.name,
+      ]
+        .filter(Boolean)
+        .join(" – "),
+      status: statusLabel,
+      statusRaw: wo.status,
+
+      scheduledDate,
+      scheduledTime,
+      assignedTechnician: wo.technician?.id || null,
+      estimatedDuration: String(estimatedHours || "2"),
+      priority: priorityLabel,
+      notes: wo.notes || "",
+
+      paymentRecord: null, // later use
+
+      raw: wo,
+    };
+  };
+
+  // 🔢 আলাদা API call দিয়ে সব status এর count বের করছি
+  const loadCounts = async () => {
+    try {
+      const res = await DispatcherAPI.getWorkOrders({
+        page: 1,
+        limit: 1000, // reasonable upper bound
+      });
+
+      const data = res.data;
+      const list = Array.isArray(data.workOrders) ? data.workOrders : [];
+
+      const counts = {
+        all: data.pagination?.total || list.length,
+        pending: 0,
+        assigned: 0,
+        inProgress: 0,
+        completed: 0,
+        cancelled: 0,
+      };
+
+      list.forEach((wo) => {
+        switch (wo.status) {
+          case "UNASSIGNED":
+            counts.pending += 1;
+            break;
+          case "ASSIGNED":
+            counts.assigned += 1;
+            break;
+          case "IN_PROGRESS":
+            counts.inProgress += 1;
+            break;
+          case "COMPLETED":
+            counts.completed += 1;
+            break;
+          case "CANCELLED":
+            counts.cancelled += 1;
+            break;
+          default:
+            break;
+        }
+      });
+
+      setStatusCounts(counts);
+    } catch (err) {
+      console.error("Failed to load status counts", err);
+      // counts না পেলে UI তে পুরোনো মান দেখাবে, এটা ঠিক আছে
+    }
+  };
+
+  const loadWorkOrders = async (pageToLoad = page, tab = activeTab) => {
+    try {
+      setLoading(true);
+      setError("");
+
+      const statusParam = mapLabelToBackendStatus(tab);
+
+      const params = { page: pageToLoad, limit };
+      if (statusParam) params.status = statusParam;
+
+      const res = await DispatcherAPI.getWorkOrders(params);
+      const data = res.data;
+
+      const list = Array.isArray(data.workOrders) ? data.workOrders : [];
+
+      setWorkOrders(list.map(transformWorkOrder));
+      setTotal(data.pagination?.total || list.length);
+      setTotalPages(data.pagination?.totalPages || 1);
+      setPage(data.pagination?.page || pageToLoad);
+    } catch (err) {
+      console.error("Failed to load work orders", err);
+      setError(
+        err.response?.data?.message ||
+          "Failed to load work orders. Please try again."
+      );
+      setWorkOrders([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadNearbyTechnicians = async (wo) => {
+    try {
+      setTechLoading(true);
+      setTechError("");
+      setTechnicians([]);
+
+      const lat =
+        wo.raw?.latitude ??
+        wo.raw?.customer?.latitude ??
+        wo.raw?.jobLocation?.latitude;
+      const lng =
+        wo.raw?.longitude ??
+        wo.raw?.customer?.longitude ??
+        wo.raw?.jobLocation?.longitude;
+
+      if (lat == null || lng == null) {
+        setTechError("Job location not available for this work order.");
+        return;
+      }
+
+      const res = await DispatcherAPI.getNearbyTechnicians({
+        latitude: lat,
+        longitude: lng,
+        maxDistance: 50,
+        status: "ONLINE",
+      });
+
+      const data = res.data;
+      const list = Array.isArray(data.technicians) ? data.technicians : [];
+      setTechnicians(list.map(mapNearbyTech));
+    } catch (err) {
+      console.error("Failed to load nearby technicians", err);
+      setTechError(
+        err.response?.data?.message ||
+          "Failed to load nearby technicians. Please try again."
+      );
+      setTechnicians([]);
+    } finally {
+      setTechLoading(false);
+    }
+  };
+
+  // mount + tab change → list + counts দুটোই রিফ্রেশ
+  useEffect(() => {
+    loadCounts(); // tab বদলালেও counts আবার fresh নেবে
+    loadWorkOrders(1, activeTab);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab]);
+
+  /* ------------ Derived data ------------- */
+
+  const technicianNameMap = useMemo(() => {
+    return technicians.reduce((acc, t) => {
+      acc[t.id] = t.name;
+      return acc;
+    }, {});
+  }, [technicians]);
 
   const getTechnicianName = (id) => {
     if (!id) return "";
-    return technicianNameMap[id] || id;
+    return technicianNameMap[id] || `Tech #${id}`;
   };
-
-  /* ------------ Helpers ------------- */
 
   const getPriorityColor = (priority) => {
     switch (priority) {
       case "High":
-        return "bg-red-100 text-red-800";
+        return "bg-green-100 text-green-800"; // তোমার UI অনুযায়ী চাইলে বদলাও
       case "Medium":
         return "bg-orange-100 text-orange-800";
       case "Low":
-        return "bg-green-100 text-green-800";
+        return "bg-gray-100 text-gray-800";
       default:
         return "bg-gray-100 text-gray-800";
     }
   };
 
-  const filterWorkOrders = (status) => {
+  const filteredWorkOrders = useMemo(() => {
     let list = [...workOrders];
 
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
       list = list.filter(
         (wo) =>
-          wo.id.toLowerCase().includes(q) ||
+          (wo.woNumber && wo.woNumber.toLowerCase().includes(q)) ||
+          String(wo.id).includes(q) ||
           wo.customerName.toLowerCase().includes(q)
       );
     }
 
-    if (status && status !== "all") {
-      list = list.filter(
-        (wo) => wo.status.toLowerCase() === status.toLowerCase()
-      );
-    }
-
+    // এখানে আবার status filter করার দরকার নেই, কারণ API ই tab অনুযায়ী filter করে দিচ্ছে
     return list;
+  }, [workOrders, searchQuery]);
+
+  // এখন থেকে tab count সবসময় statusCounts থেকে আসবে
+  const countByStatus = (statusKey) => {
+    switch (statusKey) {
+      case "all":
+        return statusCounts.all;
+      case "pending":
+        return statusCounts.pending;
+      case "assigned":
+        return statusCounts.assigned;
+      case "in progress":
+        return statusCounts.inProgress;
+      case "completed":
+        return statusCounts.completed;
+      case "cancelled":
+        return statusCounts.cancelled;
+      default:
+        return 0;
+    }
   };
 
   const getPaymentStatusLabel = (wo) => {
@@ -281,8 +393,15 @@ export default function DispatcherWorkOrders() {
   /* ------------ Action handlers ------------- */
 
   const openAction = (wo, action) => {
-    setSelectedWorkOrder(wo);
-    setCurrentAction(action);
+    if (action === "reassign") {
+      loadNearbyTechnicians(wo).then(() => {
+        setSelectedWorkOrder(wo);
+        setCurrentAction(action);
+      });
+    } else {
+      setSelectedWorkOrder(wo);
+      setCurrentAction(action);
+    }
   };
 
   const closeModals = () => {
@@ -290,110 +409,112 @@ export default function DispatcherWorkOrders() {
     setCurrentAction(null);
   };
 
-  const handleWorkOrderAction = (workOrderId, action, data) => {
-    setWorkOrders((prev) =>
-      prev.map((wo) => {
-        if (wo.id !== workOrderId) return wo;
+  const handleWorkOrderAction = async (workOrderId, action, data) => {
+    try {
+      if (action === "cancel") {
+        await DispatcherAPI.cancelWorkOrder(workOrderId, {
+          reason: data.reason,
+        });
+      } else if (action === "reassign") {
+        await DispatcherAPI.reassignWorkOrder(workOrderId, {
+          technicianId: data.assignedTechnician,
+          reason: data.notes || "Previous technician unavailable",
+        });
 
-        if (action === "cancel") {
-          return { ...wo, status: "Cancelled", notes: data.reason };
-        }
-
-        const updated = {
-          ...wo,
+        await DispatcherAPI.rescheduleWorkOrder(workOrderId, {
           scheduledDate: data.scheduledDate,
           scheduledTime: data.scheduledTime,
-          estimatedDuration: data.estimatedDuration,
+          estimatedDuration: Number(data.estimatedDuration || 2),
           notes: data.notes,
-        };
+        });
+      } else if (action === "reschedule") {
+        await DispatcherAPI.rescheduleWorkOrder(workOrderId, {
+          scheduledDate: data.scheduledDate,
+          scheduledTime: data.scheduledTime,
+          estimatedDuration: Number(data.estimatedDuration || 2),
+          notes: data.notes,
+        });
+      }
 
-        if (action === "assign") {
-          updated.assignedTechnician = data.assignedTechnician;
-          updated.status = "Assigned";
-        }
-        if (action === "reassign") {
-          updated.assignedTechnician = data.assignedTechnician;
-        }
-        if (action === "reschedule") {
-          // keep current status
-        }
+      Swal.fire({
+        icon: "success",
+        title:
+          action === "cancel"
+            ? "Work order cancelled"
+            : "Work order updated",
+        confirmButtonColor: "#c20001",
+      });
 
-        return updated;
-      })
-    );
+      closeModals();
+      // action এর পরে list + counts আবার fresh নেব
+      loadCounts();
+      loadWorkOrders(1, activeTab);
+    } catch (err) {
+      console.error("WO action failed", err);
 
-    Swal.fire({
-      icon: "success",
-      title:
-        action === "cancel"
-          ? "Work order cancelled"
-          : action === "reschedule"
-          ? "Schedule updated"
-          : "Work order updated",
-      confirmButtonColor: "#c20001",
-    });
+      const backendMsg = err.response?.data?.message || "";
+      let friendlyMsg =
+        "Something went wrong while updating the work order.";
 
-    closeModals();
+      if (
+        backendMsg.includes("scheduledAt") ||
+        backendMsg.includes("Invalid Date")
+      ) {
+        friendlyMsg =
+          "Invalid schedule date/time. Please choose a valid date and time, then try again.";
+      } else if (backendMsg.toLowerCase().includes("technician")) {
+        friendlyMsg =
+          "Unable to update technician assignment. Please try again or select a different technician.";
+      }
+
+      Swal.fire({
+        icon: "error",
+        title: "Action failed",
+        text: friendlyMsg,
+        confirmButtonColor: "#c20001",
+      });
+    }
   };
 
-  const handleVerifyPayment = (workOrderId, commissionAmount) => {
-    setWorkOrders((prev) =>
-      prev.map((wo) => {
-        if (wo.id !== workOrderId) return wo;
-        if (!wo.paymentRecord) return wo;
-
-        return {
-          ...wo,
-          paymentRecord: {
-            ...wo.paymentRecord,
-            paymentStatus: "Verified",
-            commissionAmount,
-            commissionBooked: true,
-            commissionBookedDate: new Date().toISOString().split("T")[0],
-          },
-        };
-      })
-    );
-
-    Swal.fire({
-      icon: "success",
-      title: "Payment verified",
-      text: "Commission has been booked.",
-      confirmButtonColor: "#c20001",
-    });
-
-    closeModals();
-  };
-
-  const handleRejectPayment = (reason) => {
-    setWorkOrders((prev) =>
-      prev.map((wo) => {
-        if (wo.id !== selectedWorkOrder.id) return wo;
-        if (!wo.paymentRecord) return wo;
-
-        return {
-          ...wo,
-          paymentRecord: {
-            ...wo.paymentRecord,
-            paymentStatus: "Rejected",
-            rejectionReason: reason,
-          },
-        };
-      })
-    );
-
+  const handleVerifyPayment = () => {
     Swal.fire({
       icon: "info",
-      title: "Payment rejected",
+      title: "View only",
+      text: "Payment verification can only be done by Admin.",
       confirmButtonColor: "#c20001",
     });
+    closeModals();
+  };
 
+  const handleRejectPayment = () => {
+    Swal.fire({
+      icon: "info",
+      title: "View only",
+      text: "Payment rejection can only be done by Admin.",
+      confirmButtonColor: "#c20001",
+    });
     closeModals();
   };
 
   /* ------------ Render ------------- */
 
   const renderWorkOrders = (list) => {
+    if (loading) {
+      return (
+        <div className="py-12 text-center text-gray-500">
+          Loading work orders…
+        </div>
+      );
+    }
+
+    if (error) {
+      return (
+        <div className="py-8 text-center text-red-600 text-sm">
+          {error}
+        </div>
+      );
+    }
+
     if (!list.length) {
       return (
         <div className="py-12 text-center text-gray-500">
@@ -414,7 +535,7 @@ export default function DispatcherWorkOrders() {
             <div className="mb-3 flex items-start justify-between">
               <div>
                 <h3 className="mb-1 text-sm font-semibold text-[#c20001]">
-                  {wo.id}
+                  {wo.woNumber || `WO-${wo.id}`}
                 </h3>
                 <p className="text-xs text-gray-600">SR: {wo.srId}</p>
               </div>
@@ -513,35 +634,24 @@ export default function DispatcherWorkOrders() {
                     {/* Dispatcher actions (non-completed) */}
                     {wo.status !== "Completed" && (
                       <div className="flex gap-1">
-                        {(wo.status === "Pending" ||
-                          wo.status === "Assigned") && (
+                        {/* 🔁 শুধু Reassign – technician already assigned থাকলে */}
+                        {(wo.status === "Assigned" ||
+                          wo.status === "In Progress") && (
                           <div className="group relative">
                             <button
                               type="button"
-                              onClick={() =>
-                                openAction(
-                                  wo,
-                                  wo.status === "Pending"
-                                    ? "assign"
-                                    : "reassign"
-                                )
-                              }
+                              onClick={() => openAction(wo, "reassign")}
                               className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-gray-300 bg-white text-xs text-gray-700 transition hover:bg-gray-100"
                             >
-                              {wo.status === "Pending" ? (
-                                <UserCheck className="h-4 w-4" />
-                              ) : (
-                                <RefreshCw className="h-4 w-4" />
-                              )}
+                              <RefreshCw className="h-4 w-4" />
                             </button>
                             <div className="pointer-events-none absolute bottom-full left-1/2 z-50 mb-1 hidden -translate-x-1/2 rounded bg-gray-900 px-2 py-1 text-xs text-white group-hover:block">
-                              {wo.status === "Pending"
-                                ? "Assign Technician"
-                                : "Reassign"}
+                              Reassign
                             </div>
                           </div>
                         )}
 
+                        {/* Reschedule */}
                         {(wo.status === "Pending" ||
                           wo.status === "Assigned" ||
                           wo.status === "In Progress") && (
@@ -559,6 +669,7 @@ export default function DispatcherWorkOrders() {
                           </div>
                         )}
 
+                        {/* Cancel */}
                         {(wo.status === "Pending" ||
                           wo.status === "Assigned") && (
                           <div className="group relative">
@@ -587,9 +698,9 @@ export default function DispatcherWorkOrders() {
                         <button
                           type="button"
                           onClick={() => openAction(wo, "verifyPayment")}
-                          className="rounded-[10px] bg-[#c20001] px-4 py-2.5 text-sm font-medium text-white shadow-sm transition hover:bg-[#c20001]/90"
+                          className="rounded-[10px] border border-gray-300 px-4 py-2.5 text-sm font-medium text-gray-800 hover:bg-gray-50"
                         >
-                          Verify Payment
+                          View Payment
                         </button>
                       );
                     }
@@ -640,96 +751,85 @@ export default function DispatcherWorkOrders() {
     );
   };
 
-  const listForActiveTab =
-    activeTab === "all"
-      ? filterWorkOrders("all")
-      : filterWorkOrders(activeTab);
-
   return (
     <div className="p-6">
       <div className="rounded-xl border border-gray-200 bg-white shadow-sm">
         <div className="px-6 pb-6 pt-6">
-          {workOrders.length === 0 ? (
-            <div className="py-12 text-center text-gray-500">
-              <p>No work orders have been created yet.</p>
-              <p className="mt-2 text-sm">
-                Convert a service request to create your first work order.
-              </p>
+          {/* Search */}
+          <div className="mb-6">
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+              <input
+                placeholder="Search by WO number or Customer…"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full rounded-lg border border-gray-300 bg-white py-2 pl-10 pr-3 text-sm text-gray-900 shadow-sm focus:outline-none focus:ring-[1px] focus:ring-[#ffb111]"
+              />
             </div>
-          ) : (
-            <>
-              {/* Search */}
-              <div className="mb-6">
-                <div className="relative">
-                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
-                  <input
-                    placeholder="Search by WO ID or Customer…"
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="w-full rounded-lg border border-gray-300 bg-white py-2 pl-10 pr-3 text-sm text-gray-900 shadow-sm focus:outline-none focus:ring-[1px] focus:ring-[#ffb111]"
-                  />
-                </div>
-              </div>
+          </div>
 
-              {/* Tabs */}
-              <div className="w-full">
-                <div className="grid w-full grid-cols-6 rounded-lg bg-gray-100 p-1 text-xs font-medium text-gray-700">
-                  {[
-                    { key: "all", label: "All", count: workOrders.length },
-                    {
-                      key: "pending",
-                      label: "Pending",
-                      count: filterWorkOrders("pending").length,
-                    },
-                    {
-                      key: "assigned",
-                      label: "Assigned",
-                      count: filterWorkOrders("assigned").length,
-                    },
-                    {
-                      key: "in progress",
-                      label: "In Progress",
-                      count: filterWorkOrders("in progress").length,
-                    },
-                    {
-                      key: "completed",
-                      label: "Completed",
-                      count: filterWorkOrders("completed").length,
-                    },
-                    {
-                      key: "cancelled",
-                      label: "Cancelled",
-                      count: filterWorkOrders("cancelled").length,
-                    },
-                  ].map((tab) => (
-                    <button
-                      key={tab.key}
-                      type="button"
-                      onClick={() => setActiveTab(tab.key)}
-                      className={`inline-flex items-center justify-center rounded-md px-2 py-1 text-xs transition ${
-                        activeTab === tab.key
-                          ? "bg-white text-[#c20001] shadow-sm"
-                          : "bg-transparent text-gray-700 hover:bg-white"
-                      }`}
-                    >
-                      {tab.label} ({tab.count})
-                    </button>
-                  ))}
-                </div>
+          {/* Tabs */}
+          <div className="w-full">
+            <div className="grid w-full grid-cols-6 rounded-lg bg-gray-100 p-1 text-xs font-medium text-gray-700">
+              {[
+                { key: "all", label: "All" },
+                { key: "pending", label: "Pending" },
+                { key: "assigned", label: "Assigned" },
+                { key: "in progress", label: "In Progress" },
+                { key: "completed", label: "Completed" },
+                { key: "cancelled", label: "Cancelled" },
+              ].map((tab) => (
+                <button
+                  key={tab.key}
+                  type="button"
+                  onClick={() => setActiveTab(tab.key)}
+                  className={`inline-flex items-center justify-center rounded-md px-2 py-1 text-xs transition ${
+                    activeTab === tab.key
+                      ? "bg-white text-[#c20001] shadow-sm"
+                      : "bg-transparent text-gray-700 hover:bg-white"
+                  }`}
+                >
+                  {tab.label} ({countByStatus(tab.key)})
+                </button>
+              ))}
+            </div>
 
-                <div className="mt-6">{renderWorkOrders(listForActiveTab)}</div>
+            <div className="mt-6">
+              {renderWorkOrders(filteredWorkOrders)}
+            </div>
+
+            {/* Pagination */}
+            {totalPages > 1 && (
+              <div className="mt-4 flex items-center justify-end gap-3 text-xs text-gray-600">
+                <span>
+                  Page {page} of {totalPages} • {total} results
+                </span>
+                <button
+                  type="button"
+                  disabled={page <= 1}
+                  onClick={() => loadWorkOrders(page - 1, activeTab)}
+                  className="rounded border border-gray-300 px-2 py-1 disabled:opacity-40"
+                >
+                  Prev
+                </button>
+                <button
+                  type="button"
+                  disabled={page >= totalPages}
+                  onClick={() => loadWorkOrders(page + 1, activeTab)}
+                  className="rounded border border-gray-300 px-2 py-1 disabled:opacity-40"
+                >
+                  Next
+                </button>
               </div>
-            </>
-          )}
+            )}
+          </div>
         </div>
       </div>
 
       {/* Modals */}
       {selectedWorkOrder &&
         currentAction &&
-        ["assign", "reassign", "reschedule", "cancel"].includes(
-          currentAction
-        ) && (
+        ["reassign", "reschedule", "cancel"].includes(currentAction) && (
           <WorkOrderActionsModal
             workOrder={selectedWorkOrder}
             action={currentAction}
@@ -746,7 +846,7 @@ export default function DispatcherWorkOrders() {
           <PaymentVerificationModal
             isOpen={true}
             onClose={closeModals}
-            workOrderId={selectedWorkOrder.id}
+            workOrderId={selectedWorkOrder.woNumber || selectedWorkOrder.id}
             customerName={selectedWorkOrder.customerName}
             technicianName={getTechnicianName(
               selectedWorkOrder.assignedTechnician
@@ -762,12 +862,20 @@ export default function DispatcherWorkOrders() {
               )?.commissionRate || 10
             }
             paymentRecord={selectedWorkOrder.paymentRecord}
-            onVerify={(amount) =>
-              handleVerifyPayment(selectedWorkOrder.id, amount)
-            }
+            onVerify={handleVerifyPayment}
             onReject={handleRejectPayment}
           />
         )}
+
+      {/* Nearby technicians loading/error info */}
+      {techLoading && (
+        <div className="mt-2 text-xs text-gray-500">
+          Loading nearby technicians…
+        </div>
+      )}
+      {techError && (
+        <div className="mt-2 text-xs text-red-600">{techError}</div>
+      )}
     </div>
   );
 }

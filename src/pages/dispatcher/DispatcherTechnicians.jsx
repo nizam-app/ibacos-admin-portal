@@ -1,4 +1,5 @@
-import React, { useState, useMemo } from "react";
+// src/pages/dispatcher/DispatcherTechnicians.jsx
+import React, { useState, useMemo, useEffect } from "react";
 import {
   UserCheck,
   UserX,
@@ -15,92 +16,7 @@ import {
   X as XIcon,
 } from "lucide-react";
 import Swal from "sweetalert2";
-
-// -----------------------------
-// Mock Data
-// -----------------------------
-const initialTechnicians = [
-  {
-    id: "TECH-001",
-    name: "Ahmed Khan",
-    specialty: "Electrical",
-    phone: "+971 50 123 4567",
-    email: "ahmed.khan@example.com",
-    status: "Active", // Active | Blocked
-    blockedReason: "",
-    blockedDate: "",
-    activeWorkOrders: 2,
-    completedJobs: 18,
-    employmentType: "Freelancer", // Freelancer | Internal Employee
-    commissionRate: 12,
-    salary: null,
-    bonusRate: null,
-    openWorkOrders: [
-      {
-        id: "WO-1023",
-        status: "Assigned",
-        scheduledDate: "2025-03-10",
-        scheduledTime: "10:30 AM",
-        customerName: "John Doe",
-        category: "Electrical",
-      },
-      {
-        id: "WO-1027",
-        status: "In Progress",
-        scheduledDate: "2025-03-11",
-        scheduledTime: "02:00 PM",
-        customerName: "Sarah Lee",
-        category: "Electrical",
-      },
-    ],
-    joinDate: "2024-06-01",
-  },
-  {
-    id: "TECH-002",
-    name: "Maria Garcia",
-    specialty: "Plumbing",
-    phone: "+971 50 987 6543",
-    email: "maria.plumb@example.com",
-    status: "Active",
-    blockedReason: "",
-    blockedDate: "",
-    activeWorkOrders: 0,
-    completedJobs: 25,
-    employmentType: "Internal Employee",
-    commissionRate: null,
-    salary: 5500,
-    bonusRate: 7.5,
-    openWorkOrders: [],
-    joinDate: "2023-11-15",
-  },
-  {
-    id: "TECH-003",
-    name: "Omar Ali",
-    specialty: "HVAC",
-    phone: "+971 55 111 2222",
-    email: "omar.hvac@example.com",
-    status: "Blocked",
-    blockedReason: "Repeated no-show for scheduled jobs",
-    blockedDate: "2025-01-15",
-    activeWorkOrders: 1,
-    completedJobs: 9,
-    employmentType: "Freelancer",
-    commissionRate: 10,
-    salary: null,
-    bonusRate: null,
-    openWorkOrders: [
-      {
-        id: "WO-0999",
-        status: "Pending",
-        scheduledDate: "2025-03-12",
-        scheduledTime: "09:00 AM",
-        customerName: "ACME Corp.",
-        category: "HVAC",
-      },
-    ],
-    joinDate: "2024-01-10",
-  },
-];
+import TechniciansAPI from "../../api/techniciansApi";
 
 // -----------------------------
 // Helper small components
@@ -180,7 +96,9 @@ function BlockTechnicianModal({ technician, mode, onClose, onConfirm }) {
             </div>
             <div>
               <p className="text-gray-500">Technician ID</p>
-              <p className="font-medium text-gray-900">{technician.id}</p>
+              <p className="font-medium text-gray-900">
+                {technician.code || technician.id}
+              </p>
             </div>
             <div>
               <p className="text-gray-500">Specialty</p>
@@ -274,7 +192,13 @@ function AddEditTechnicianModal({ open, technician, onClose, onSave }) {
 
   React.useEffect(() => {
     if (technician) {
-      setForm(technician);
+      setForm({
+        name: technician.name || "",
+        specialty: technician.specialty || "",
+        phone: technician.phone || "",
+        email: technician.email || "",
+        employmentType: technician.employmentType || "Freelancer",
+      });
     } else {
       setForm({
         name: "",
@@ -293,7 +217,11 @@ function AddEditTechnicianModal({ open, technician, onClose, onSave }) {
   const handleSubmit = (e) => {
     e.preventDefault();
     if (!form.name.trim() || !form.specialty.trim() || !form.phone.trim()) {
-      Swal.fire("Missing fields", "Name, specialty and phone are required.", "warning");
+      Swal.fire(
+        "Missing fields",
+        "Name, specialty and phone are required.",
+        "warning"
+      );
       return;
     }
     onSave(form);
@@ -449,6 +377,9 @@ function TechnicianWorkloadModal({ technician, onClose }) {
   if (!technician) return null;
 
   const workOrders = technician.openWorkOrders || [];
+  const workOrdersCount =
+    technician.openWorkOrdersCount ??
+    (technician.openWorkOrders?.length || 0);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
@@ -459,7 +390,7 @@ function TechnicianWorkloadModal({ technician, onClose }) {
               Open Work Orders – {technician.name}
             </h2>
             <p className="text-xs text-gray-500">
-              Currently assigned work orders ({workOrders.length})
+              Currently assigned work orders ({workOrdersCount})
             </p>
           </div>
           <button
@@ -473,7 +404,7 @@ function TechnicianWorkloadModal({ technician, onClose }) {
         <div className="max-h-[420px] overflow-y-auto px-6 py-4 space-y-3 text-sm">
           {workOrders.length === 0 ? (
             <div className="text-center text-gray-500 py-6">
-              No open work orders.
+              No open work orders list available from API.
             </div>
           ) : (
             workOrders.map((wo) => (
@@ -529,7 +460,10 @@ function TechnicianWorkloadModal({ technician, onClose }) {
 // Main Page – DispatcherTechnicians
 // -----------------------------
 export default function DispatcherTechnicians() {
-  const [technicians, setTechnicians] = useState(initialTechnicians);
+  const [technicians, setTechnicians] = useState([]);
+  const [overview, setOverview] = useState(null);
+  const [loading, setLoading] = useState(true);
+
   const [searchTerm, setSearchTerm] = useState("");
   const [typeFilter, setTypeFilter] = useState("all"); // all | freelancer | employee
 
@@ -541,7 +475,83 @@ export default function DispatcherTechnicians() {
 
   const [workloadTarget, setWorkloadTarget] = useState(null);
 
-  // Derived stats
+  // -----------------------------
+  // API loading helpers
+  // -----------------------------
+  const mapTechnicianFromApi = (u) => {
+    const profile = u.technicianProfile || {};
+    const specialization = profile.specialization || "";
+    const mainSpecialty = specialization.split(",")[0] || specialization;
+
+    return {
+      id: u.id, // backend id
+      code: `TECH-${String(u.id).padStart(3, "0")}`, // display id
+      name: u.name,
+      specialty: mainSpecialty.trim() || "General",
+      phone: u.phone,
+      email: u.email,
+      status: u.isBlocked ? "Blocked" : "Active",
+      blockedReason: u.blockedReason || "",
+      blockedDate: u.blockedAt ? u.blockedAt.split("T")[0] : "",
+      activeWorkOrders: u.activeWorkOrders ?? 0,
+      completedJobs: u.completedJobs ?? 0,
+      openWorkOrdersCount: u.openWorkOrders ?? 0,
+      openWorkOrders: [], // details nai backend theke
+      employmentType:
+        profile.type === "FREELANCER"
+          ? "Freelancer"
+          : "Internal Employee",
+      commissionRate: profile.commissionRate
+        ? Math.round(profile.commissionRate * 100)
+        : u.commissionRate
+        ? Math.round(u.commissionRate * 100)
+        : null,
+      salary: profile.baseSalary ?? null,
+      bonusRate: profile.bonusRate
+        ? Math.round(profile.bonusRate * 100)
+        : null,
+      joinDate:
+        profile.joinDate?.split("T")[0] ||
+        (u.createdAt ? u.createdAt.split("T")[0] : ""),
+    };
+  };
+
+  const loadTechnicians = async () => {
+    try {
+      setLoading(true);
+      const res = await TechniciansAPI.listTechnicians();
+
+      // API theke jodi direct array ashe, oita handle korar jonno
+      const raw = Array.isArray(res.data)
+        ? res.data
+        : res.data?.users || res.data || [];
+
+      const mapped = raw.map(mapTechnicianFromApi);
+      setTechnicians(mapped);
+    } catch (err) {
+      console.error(err);
+      Swal.fire("Error", "Failed to load technicians", "error");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadOverview = async () => {
+    try {
+      const res = await TechniciansAPI.getStatusOverview();
+      setOverview(res.data);
+    } catch (err) {
+      console.error(err);
+      // optional: no popup, just console
+    }
+  };
+
+  useEffect(() => {
+    loadTechnicians();
+    loadOverview();
+  }, []);
+
+  // Derived stats (from list)
   const stats = useMemo(() => {
     const active = technicians.filter((t) => t.status === "Active").length;
     const blocked = technicians.filter((t) => t.status === "Blocked").length;
@@ -559,9 +569,9 @@ export default function DispatcherTechnicians() {
       const q = searchTerm.toLowerCase();
       const matchesSearch =
         !q ||
-        t.name.toLowerCase().includes(q) ||
-        t.specialty.toLowerCase().includes(q) ||
-        t.id.toLowerCase().includes(q);
+        (t.name || "").toLowerCase().includes(q) ||
+        (t.specialty || "").toLowerCase().includes(q) ||
+        (t.code || String(t.id)).toLowerCase().includes(q);
 
       if (!matchesSearch) return false;
 
@@ -586,41 +596,43 @@ export default function DispatcherTechnicians() {
     setModalOpen(true);
   };
 
-  const handleSaveTechnician = (data) => {
-    if (editTarget) {
-      // update
-      setTechnicians((prev) =>
-        prev.map((t) =>
-          t.id === editTarget.id ? { ...t, ...data } : t
-        )
-      );
-      Swal.fire("Updated", "Technician updated successfully.", "success");
-    } else {
-      const newId = `TECH-${String(technicians.length + 1).padStart(3, "0")}`;
-      setTechnicians((prev) => [
-        ...prev,
-        {
-          ...data,
-          id: newId,
-          status: "Active",
-          activeWorkOrders: 0,
-          completedJobs: 0,
-          openWorkOrders: [],
-          blockedReason: "",
-          blockedDate: "",
-          commissionRate:
-            data.employmentType === "Freelancer" ? 10 : null,
-          salary:
-            data.employmentType === "Internal Employee" ? 5000 : null,
-          bonusRate:
-            data.employmentType === "Internal Employee" ? 5 : null,
-          joinDate: new Date().toISOString().split("T")[0],
-        },
-      ]);
-      Swal.fire("Technician added", "New technician created.", "success");
+  const handleSaveTechnician = async (data) => {
+    try {
+      if (editTarget) {
+        // Update basic info
+        await TechniciansAPI.updateTechnician(editTarget.id, {
+          name: data.name,
+          phone: data.phone,
+          email: data.email,
+        });
+        Swal.fire("Updated", "Technician updated successfully.", "success");
+      } else {
+        // Create technician – dispatcher version, simple defaults
+        await TechniciansAPI.createTechnician({
+          phone: data.phone,
+          password: "tech123", // TODO: backend e real password / invite flow handle korbe
+          name: data.name,
+          role: "TECH_FREELANCER",
+          technicianProfile: {
+            type:
+              data.employmentType === "Freelancer"
+                ? "FREELANCER"
+                : "EMPLOYEE",
+            commissionRate: 0.2,
+            bonusRate: 0.05,
+          },
+        });
+        Swal.fire("Technician added", "New technician created.", "success");
+      }
+
+      setModalOpen(false);
+      setEditTarget(null);
+      await loadTechnicians();
+      await loadOverview();
+    } catch (err) {
+      console.error(err);
+      Swal.fire("Error", "Failed to save technician", "error");
     }
-    setModalOpen(false);
-    setEditTarget(null);
   };
 
   const handleBlockStart = (tech) => {
@@ -633,41 +645,31 @@ export default function DispatcherTechnicians() {
     setBlockMode("unblock");
   };
 
-  const handleConfirmBlock = (reason) => {
+  const handleConfirmBlock = async (reason) => {
     if (!blockTarget) return;
-    if (blockMode === "block") {
-      setTechnicians((prev) =>
-        prev.map((t) =>
-          t.id === blockTarget.id
-            ? {
-                ...t,
-                status: "Blocked",
-                blockedReason: reason,
-                blockedDate: new Date().toISOString().split("T")[0],
-              }
-            : t
-        )
-      );
-      Swal.fire(
-        "Technician blocked",
-        "Technician will no longer receive new work orders.",
-        "success"
-      );
-    } else {
-      setTechnicians((prev) =>
-        prev.map((t) =>
-          t.id === blockTarget.id
-            ? { ...t, status: "Active", blockedReason: "", blockedDate: "" }
-            : t
-        )
-      );
-      Swal.fire(
-        "Technician unblocked",
-        "Technician is available again for assignment.",
-        "success"
-      );
+    try {
+      if (blockMode === "block") {
+        await TechniciansAPI.blockTechnician(blockTarget.id, reason);
+        Swal.fire(
+          "Technician blocked",
+          "Technician will no longer receive new work orders.",
+          "success"
+        );
+      } else {
+        await TechniciansAPI.unblockTechnician(blockTarget.id);
+        Swal.fire(
+          "Technician unblocked",
+          "Technician is available again for assignment.",
+          "success"
+        );
+      }
+      setBlockTarget(null);
+      await loadTechnicians();
+      await loadOverview();
+    } catch (err) {
+      console.error(err);
+      Swal.fire("Error", "Failed to update technician status", "error");
     }
-    setBlockTarget(null);
   };
 
   const getStatusBadge = (status) => {
@@ -700,6 +702,9 @@ export default function DispatcherTechnicians() {
     );
   };
 
+  // -----------------------------
+  // RENDER
+  // -----------------------------
   return (
     <div className="p-6 space-y-6">
       {/* Header */}
@@ -726,13 +731,13 @@ export default function DispatcherTechnicians() {
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <StatCard
           title="Active Technicians"
-          value={stats.active}
+          value={overview?.activeTechnicians ?? stats.active}
           icon={UserCheck}
           colorClass="bg-green-500"
         />
         <StatCard
           title="Blocked Technicians"
-          value={stats.blocked}
+          value={overview?.blockedTechnicians ?? stats.blocked}
           icon={UserX}
           colorClass="bg-red-500"
         />
@@ -814,7 +819,11 @@ export default function DispatcherTechnicians() {
           </div>
         </div>
 
-        {filteredTechnicians.length === 0 ? (
+        {loading ? (
+          <div className="text-center py-10 text-gray-500 text-sm">
+            Loading technicians...
+          </div>
+        ) : filteredTechnicians.length === 0 ? (
           <div className="text-center py-10 text-gray-500 text-sm">
             No technicians match your search/filter.
           </div>
@@ -839,7 +848,9 @@ export default function DispatcherTechnicians() {
                       {getStatusBadge(t.status)}
                       {getEmploymentBadge(t.employmentType)}
                     </div>
-                    <p className="text-xs text-gray-500 mt-1">{t.id}</p>
+                    <p className="text-xs text-gray-500 mt-1">
+                      {t.code || t.id}
+                    </p>
                   </div>
                   <Badge className="bg-amber-50 text-amber-800 border border-amber-200">
                     {t.specialty}
@@ -881,17 +892,19 @@ export default function DispatcherTechnicians() {
                     <span>Open work orders</span>
                     <span className="flex items-center gap-2">
                       <span className="font-semibold text-gray-900">
-                        {t.openWorkOrders?.length || 0}
+                        {t.openWorkOrdersCount ??
+                          (t.openWorkOrders?.length || 0)}
                       </span>
-                      {t.openWorkOrders && t.openWorkOrders.length > 0 && (
-                        <button
-                          className="text-xs text-[#c20001] hover:underline flex items-center gap-1"
-                          onClick={() => setWorkloadTarget(t)}
-                        >
-                          <Eye className="w-3 h-3" />
-                          View
-                        </button>
-                      )}
+                      {t.openWorkOrders &&
+                        t.openWorkOrders.length > 0 && (
+                          <button
+                            className="text-xs text-[#c20001] hover:underline flex items-center gap-1"
+                            onClick={() => setWorkloadTarget(t)}
+                          >
+                            <Eye className="w-3 h-3" />
+                            View
+                          </button>
+                        )}
                     </span>
                   </div>
                 </div>
