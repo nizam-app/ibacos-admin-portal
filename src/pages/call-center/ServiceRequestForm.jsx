@@ -20,6 +20,10 @@ import {
 } from "../../api/serviceMetaApi";
 import LocationPickerMap from "../../components/map/LocationPickerMap";
 
+// 👉 Nouakchott default location
+const DEFAULT_LATITUDE = 18.0735;
+const DEFAULT_LONGITUDE = -15.9582;
+
 function ServiceRequestForm() {
   const [formData, setFormData] = useState({
     customerName: "",
@@ -28,8 +32,8 @@ function ServiceRequestForm() {
     address: "",
     city: "",
     landmark: "",
-    latitude: 40.4406,
-    longitude: -79.9959,
+    latitude: DEFAULT_LATITUDE,   // 👈 Nouakchott
+    longitude: DEFAULT_LONGITUDE, // 👈 Nouakchott
     customerNotes: "",
     categoryId: "",
     subserviceId: "",
@@ -196,7 +200,7 @@ function ServiceRequestForm() {
         console.error("Customer search failed", err);
         if (!cancelled) {
           setSearchError(
-            err.response?.data?.message || "Customer search failed.",
+            err.response?.data?.message || "Customer search failed."
           );
         }
       } finally {
@@ -273,8 +277,8 @@ function ServiceRequestForm() {
       address: "",
       city: "",
       landmark: "",
-      latitude: 40.4406,
-      longitude: -79.9959,
+      latitude: DEFAULT_LATITUDE,   // 👈 reset to Nouakchott
+      longitude: DEFAULT_LONGITUDE, // 👈 reset to Nouakchott
       customerNotes: "",
       categoryId: "",
       subserviceId: "",
@@ -336,7 +340,7 @@ function ServiceRequestForm() {
 
         const { data: newCustomer } = await axiosClient.post(
           "/callcenter/customers",
-          customerPayload,
+          customerPayload
         );
 
         customerId = newCustomer.id;
@@ -362,14 +366,14 @@ function ServiceRequestForm() {
       setSuccessMessage(
         `Service Request ${
           createdSR.srNumber || createdSR.id
-        } created successfully.`,
+        } created successfully.`
       );
       resetForm();
     } catch (err) {
       console.error("SR create failed", err);
       setGlobalError(
         err.response?.data?.message ||
-          "Failed to create Service Request. Please try again.",
+          "Failed to create Service Request. Please try again."
       );
     } finally {
       setSubmitting(false);
@@ -741,9 +745,7 @@ function ServiceRequestForm() {
                   type="checkbox"
                   className="h-4 w-4 rounded border-gray-300 text-[#c20001] focus:ring-[#c20001]"
                   checked={saveAsDefaultAddress}
-                  onChange={(e) =>
-                    setSaveAsDefaultAddress(e.target.checked)
-                  }
+                  onChange={(e) => setSaveAsDefaultAddress(e.target.checked)}
                   disabled={foundCustomer && useSavedAddress}
                 />
                 <label
