@@ -92,7 +92,7 @@ const Router = createBrowserRouter([
     children: [
       { path: "overview", element: <AdminOverviewPage /> },
       { path: "service-requests", element: <DispatcherServiceRequests /> },
-      { path: "work-orders", element: <AdminWorkOrders /> },
+      { path: "work-orders", element: <DispatcherWorkOrders /> },
       { path: "payments", element: <AdminPaymentsPage /> },
       { path: "payout-management", element: <AdminPayoutManagement /> },
       { path: "technicians", element: <AdminTechniciansPage /> },

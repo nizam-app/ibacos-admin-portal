@@ -814,7 +814,7 @@ export default function AdminWorkOrders() {
       key: "in_progress",
       label: "In Progress",
       count: filterWorkOrders("in_progress").length,
-    },
+    },-
     {
       key: "completed",
       label: "Completed",

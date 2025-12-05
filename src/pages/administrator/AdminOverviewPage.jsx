@@ -13,4 +13,4 @@ const AdminOverviewPage = () => {
   );
 };
 
-export default AdminOverviewPage; 
+export default AdminOverviewPage;

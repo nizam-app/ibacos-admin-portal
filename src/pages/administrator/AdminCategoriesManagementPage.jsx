@@ -1,5 +1,5 @@
 // src/pages/administrator/AdminCategoriesManagementPage.jsx
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import Swal from "sweetalert2";
 import {
   FolderKanban,
@@ -7,10 +7,14 @@ import {
   Pencil,
   ChevronDown,
   ChevronRight,
+  Trash2,
+  RefreshCw,
 } from "lucide-react";
 
+import CategoriesAPI from "../../api/categoriesApi";
+
 // ---------------------------------------------------------
-// Small Tailwind UI helpers (local, no ../ui imports)
+// Small Tailwind UI helpers
 // ---------------------------------------------------------
 const Card = ({ className = "", children }) => (
   <div
@@ -61,11 +65,10 @@ const Button = ({
   ...props
 }) => {
   const base =
-    "inline-flex items-center justify-center rounded-lg font-medium focus:outline-none focus:ring-2 focus:ring-offset-1 transition-colors";
+    "inline-flex items-center justify-center rounded-lg font-medium focus:outline-none focus:ring-2 focus:ring-offset-1 transition-colors disabled:opacity-60 disabled:cursor-not-allowed";
   const variants = {
     solid: "bg-[#c20001] text-white hover:bg-[#a00001]",
-    outline:
-      "border border-gray-300 text-gray-700 bg-white hover:bg-gray-50",
+    outline: "border border-gray-300 text-gray-700 bg-white hover:bg-gray-50",
     ghost: "text-gray-700 hover:bg-gray-100",
   };
   const sizes = {
@@ -111,15 +114,12 @@ const Label = ({ htmlFor, children }) => (
   </label>
 );
 
-// Simple modal component (for all 3 modals)
+// Simple modal component (shared)
 const Modal = ({ open, title, description, onClose, children }) => {
   if (!open) return null;
   return (
     <div className="fixed inset-0 z-40">
-      <div
-        className="absolute inset-0 bg-black/40"
-        onClick={onClose}
-      />
+      <div className="absolute inset-0 bg-black/40" onClick={onClose} />
       <div className="absolute inset-0 flex items-center justify-center px-4">
         <div className="w-full max-w-lg rounded-xl bg-white shadow-xl border border-gray-200">
           <div className="px-6 pt-5 pb-3 border-b border-gray-100 flex items-start justify-between gap-3">
@@ -128,9 +128,7 @@ const Modal = ({ open, title, description, onClose, children }) => {
                 {title}
               </h3>
               {description && (
-                <p className="text-xs text-gray-500 mt-1">
-                  {description}
-                </p>
+                <p className="text-xs text-gray-500 mt-1">{description}</p>
               )}
             </div>
             <button
@@ -150,276 +148,49 @@ const Modal = ({ open, title, description, onClose, children }) => {
 };
 
 // ---------------------------------------------------------
-// Types (JSDoc style so .jsx works fine)
+// Utility: map API -> UI model
 // ---------------------------------------------------------
 
-/**
- * @typedef {Object} SubService
- * @property {string} id
- * @property {string} name
- * @property {string} description
- * @property {number} basePrice
- * @property {string} estimatedDuration
- * @property {boolean} active
- */
-
-/**
- * @typedef {Object} Service
- * @property {string} id
- * @property {string} name
- * @property {string} description
- * @property {boolean} active
- * @property {SubService[]} subServices
- */
-
-/**
- * @typedef {Object} Category
- * @property {string} id
- * @property {string} name
- * @property {string} description
- * @property {string} icon
- * @property {boolean} active
- * @property {Service[]} services
- */
+const mapApiCategory = (cat) => ({
+  id: String(cat.id),
+  name: cat.name,
+  description: cat.description,
+  isActive: !!cat.isActive,
+  // backend এ icon field নেই, UI-র জন্য আলাদা রাখছি (local-only)
+  icon: "",
+  services: (cat.services || []).map((srv) => ({
+    id: String(srv.id),
+    categoryId: srv.categoryId,
+    name: srv.name,
+    description: srv.description,
+    baseRate: srv.baseRate,
+    active: true, // backend এ নেই, UI-র local toggle
+    subServices: (srv.subservices || []).map((sub) => ({
+      id: String(sub.id),
+      serviceId: sub.serviceId,
+      name: sub.name,
+      description: sub.description,
+      basePrice: null,
+      estimatedDuration: "",
+      active: true, // local-only
+    })),
+  })),
+});
 
 // ---------------------------------------------------------
 // Page Component
 // ---------------------------------------------------------
 
 const AdminCategoriesManagementPage = () => {
-  /** @type {[Category[], Function]} */
-  const [categories, setCategories] = useState([
-    {
-      id: "CAT001",
-      name: "General Maintenance",
-      description: "General home and office maintenance services",
-      icon: "🔧",
-      active: true,
-      services: [
-        {
-          id: "SER001",
-          name: "Repairs & Fixes",
-          description: "General repair and fixing services",
-          active: true,
-          subServices: [
-            {
-              id: "SUB001",
-              name: "Door Repair",
-              description: "Fix door hinges, locks, and frames",
-              basePrice: 220,
-              estimatedDuration: "1.5 hours",
-              active: true,
-            },
-            {
-              id: "SUB002",
-              name: "Window Repair",
-              description: "Repair windows and frames",
-              basePrice: 180,
-              estimatedDuration: "1 hour",
-              active: true,
-            },
-          ],
-        },
-        {
-          id: "SER002",
-          name: "Lock Services",
-          description: "Lock installation and replacement",
-          active: true,
-          subServices: [
-            {
-              id: "SUB003",
-              name: "Lock Replacement",
-              description: "Replace door locks and keys",
-              basePrice: 250,
-              estimatedDuration: "1 hour",
-              active: true,
-            },
-            {
-              id: "SUB004",
-              name: "Lock Installation",
-              description: "Install new locks",
-              basePrice: 200,
-              estimatedDuration: "1 hour",
-              active: true,
-            },
-          ],
-        },
-      ],
-    },
-    {
-      id: "CAT002",
-      name: "AC Service",
-      description: "Air conditioning installation, repair, and maintenance",
-      icon: "❄️",
-      active: true,
-      services: [
-        {
-          id: "SER003",
-          name: "Installation",
-          description: "Complete AC unit installation services",
-          active: true,
-          subServices: [
-            {
-              id: "SUB005",
-              name: "Split AC Installation",
-              description: "Install split AC units",
-              basePrice: 800,
-              estimatedDuration: "4 hours",
-              active: true,
-            },
-            {
-              id: "SUB006",
-              name: "Window AC Installation",
-              description: "Install window AC units",
-              basePrice: 400,
-              estimatedDuration: "2 hours",
-              active: true,
-            },
-          ],
-        },
-        {
-          id: "SER004",
-          name: "Repair & Maintenance",
-          description: "AC repair and regular maintenance",
-          active: true,
-          subServices: [
-            {
-              id: "SUB007",
-              name: "AC Repair",
-              description: "AC troubleshooting and repair",
-              basePrice: 350,
-              estimatedDuration: "2 hours",
-              active: true,
-            },
-            {
-              id: "SUB008",
-              name: "AC Maintenance",
-              description: "Regular AC servicing and gas refill",
-              basePrice: 280,
-              estimatedDuration: "1.5 hours",
-              active: true,
-            },
-          ],
-        },
-      ],
-    },
-    {
-      id: "CAT003",
-      name: "Plumbing",
-      description: "Plumbing repairs, installations, and maintenance",
-      icon: "🚰",
-      active: true,
-      services: [
-        {
-          id: "SER005",
-          name: "Pipe Services",
-          description: "Pipe repair and installation",
-          active: true,
-          subServices: [
-            {
-              id: "SUB009",
-              name: "Pipe Leak Repair",
-              description: "Fix leaking pipes and faucets",
-              basePrice: 250,
-              estimatedDuration: "1.5 hours",
-              active: true,
-            },
-            {
-              id: "SUB010",
-              name: "Pipe Installation",
-              description: "Install new pipes",
-              basePrice: 400,
-              estimatedDuration: "3 hours",
-              active: true,
-            },
-          ],
-        },
-        {
-          id: "SER006",
-          name: "Drain Services",
-          description: "Drain cleaning and maintenance",
-          active: true,
-          subServices: [
-            {
-              id: "SUB011",
-              name: "Drain Cleaning",
-              description: "Clear blocked drains and pipes",
-              basePrice: 300,
-              estimatedDuration: "2 hours",
-              active: true,
-            },
-          ],
-        },
-      ],
-    },
-    {
-      id: "CAT004",
-      name: "Electrical",
-      description: "Electrical repairs, installations, and wiring",
-      icon: "⚡",
-      active: true,
-      services: [
-        {
-          id: "SER007",
-          name: "Lighting",
-          description: "Light installation and repair",
-          active: true,
-          subServices: [
-            {
-              id: "SUB012",
-              name: "Light Installation",
-              description: "Install new light fixtures",
-              basePrice: 180,
-              estimatedDuration: "1 hour",
-              active: true,
-            },
-            {
-              id: "SUB013",
-              name: "Light Repair",
-              description: "Fix existing lights",
-              basePrice: 120,
-              estimatedDuration: "0.5 hours",
-              active: true,
-            },
-          ],
-        },
-        {
-          id: "SER008",
-          name: "Wiring & Panels",
-          description: "Electrical wiring and panel services",
-          active: true,
-          subServices: [
-            {
-              id: "SUB014",
-              name: "Electrical Panel Repair",
-              description: "Repair or replacement of electrical panels",
-              basePrice: 450,
-              estimatedDuration: "2 hours",
-              active: true,
-            },
-            {
-              id: "SUB015",
-              name: "Socket Installation",
-              description: "Install electrical sockets and switches",
-              basePrice: 150,
-              estimatedDuration: "1 hour",
-              active: true,
-            },
-          ],
-        },
-      ],
-    },
-  ]);
+  const [categories, setCategories] = useState([]);
 
   const [expandedCategories, setExpandedCategories] = useState([]);
   const [expandedServices, setExpandedServices] = useState([]);
 
-  // Modal state
   const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
   const [isServiceModalOpen, setIsServiceModalOpen] = useState(false);
   const [isSubServiceModalOpen, setIsSubServiceModalOpen] = useState(false);
 
-  /** @type {[Category|null, Function]} */
   const [editingCategory, setEditingCategory] = useState(null);
   const [editingService, setEditingService] = useState({
     categoryId: "",
@@ -440,6 +211,7 @@ const AdminCategoriesManagementPage = () => {
   const [serviceForm, setServiceForm] = useState({
     name: "",
     description: "",
+    baseRate: "",
   });
 
   const [subServiceForm, setSubServiceForm] = useState({
@@ -448,6 +220,37 @@ const AdminCategoriesManagementPage = () => {
     basePrice: "",
     estimatedDuration: "",
   });
+
+  const [isLoading, setIsLoading] = useState(false);
+  const [isSavingCategory, setIsSavingCategory] = useState(false);
+  const [isSavingService, setIsSavingService] = useState(false);
+  const [isSavingSubService, setIsSavingSubService] = useState(false);
+
+  // -----------------------------------------------------
+  // Load categories from API
+  // -----------------------------------------------------
+  const loadCategories = async () => {
+    try {
+      setIsLoading(true);
+      const res = await CategoriesAPI.getCategories();
+      const data = Array.isArray(res.data) ? res.data : res.data?.data || [];
+      setCategories(data.map(mapApiCategory));
+    } catch (error) {
+      console.error("Failed to load categories", error);
+      await Swal.fire({
+        icon: "error",
+        title: "Failed to load categories",
+        text: "Please check your API and try again.",
+        confirmButtonColor: "#c20001",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadCategories();
+  }, []);
 
   // -----------------------------------------------------
   // Expand/collapse handlers
@@ -478,7 +281,7 @@ const AdminCategoriesManagementPage = () => {
     setCategoryForm({
       name: category.name,
       description: category.description,
-      icon: category.icon,
+      icon: category.icon || "",
     });
     setIsCategoryModalOpen(true);
   };
@@ -494,41 +297,82 @@ const AdminCategoriesManagementPage = () => {
       return;
     }
 
-    if (editingCategory) {
-      setCategories((prev) =>
-        prev.map((c) =>
-          c.id === editingCategory.id
-            ? { ...c, ...categoryForm }
-            : c
-        )
-      );
+    try {
+      setIsSavingCategory(true);
+
+      if (editingCategory) {
+        const res = await CategoriesAPI.updateCategory(editingCategory.id, {
+          name: categoryForm.name,
+          description: categoryForm.description,
+        });
+
+        const updated = res.data;
+        setCategories((prev) =>
+          prev.map((c) =>
+            c.id === String(editingCategory.id)
+              ? {
+                  ...c,
+                  name: updated.name,
+                  description: updated.description,
+                  isActive:
+                    typeof updated.isActive === "boolean"
+                      ? updated.isActive
+                      : c.isActive,
+                  icon: categoryForm.icon,
+                }
+              : c
+          )
+        );
+
+        await Swal.fire({
+          icon: "success",
+          title: "Category updated",
+          confirmButtonColor: "#c20001",
+        });
+      } else {
+        const res = await CategoriesAPI.createCategory({
+          name: categoryForm.name,
+          description: categoryForm.description,
+        });
+        const created = res.data;
+
+        const newCategory = {
+          id: String(created.id),
+          name: created.name,
+          description: created.description,
+          isActive: !!created.isActive,
+          icon: categoryForm.icon,
+          services: [],
+        };
+
+        setCategories((prev) => [...prev, newCategory]);
+
+        await Swal.fire({
+          icon: "success",
+          title: "Category created",
+          confirmButtonColor: "#c20001",
+        });
+      }
+
+      setIsCategoryModalOpen(false);
+    } catch (error) {
+      console.error("Save category failed", error);
       await Swal.fire({
-        icon: "success",
-        title: "Category updated",
+        icon: "error",
+        title: "Save failed",
+        text: "Could not save category. Please try again.",
         confirmButtonColor: "#c20001",
       });
-    } else {
-      const newCategory = {
-        id: `CAT${String(categories.length + 1).padStart(3, "0")}`,
-        ...categoryForm,
-        active: true,
-        services: [],
-      };
-      setCategories((prev) => [...prev, newCategory]);
-      await Swal.fire({
-        icon: "success",
-        title: "Category created",
-        confirmButtonColor: "#c20001",
-      });
+    } finally {
+      setIsSavingCategory(false);
     }
-    setIsCategoryModalOpen(false);
   };
 
   const handleToggleCategory = async (id) => {
     const category = categories.find((c) => c.id === id);
     if (!category) return;
 
-    const willDeactivate = category.active;
+    const willDeactivate = category.isActive;
 
     const result = await Swal.fire({
       icon: willDeactivate ? "warning" : "question",
@@ -544,17 +388,73 @@ const AdminCategoriesManagementPage = () => {
 
     if (!result.isConfirmed) return;
 
-    setCategories((prev) =>
-      prev.map((c) =>
-        c.id === id ? { ...c, active: !c.active } : c
-      )
-    );
+    try {
+      if (willDeactivate) {
+        await CategoriesAPI.deactivateCategory(id);
+      } else {
+        await CategoriesAPI.activateCategory(id);
+      }
 
-    await Swal.fire({
-      icon: "success",
-      title: willDeactivate ? "Category deactivated" : "Category activated",
+      setCategories((prev) =>
+        prev.map((c) =>
+          c.id === id ? { ...c, isActive: !c.isActive } : c
+        )
+      );
+
+      await Swal.fire({
+        icon: "success",
+        title: willDeactivate ? "Category deactivated" : "Category activated",
+        confirmButtonColor: "#c20001",
+      });
+    } catch (error) {
+      console.error("Toggle category failed", error);
+      await Swal.fire({
+        icon: "error",
+        title: "Action failed",
+        text: "Could not change category status. Please try again.",
+        confirmButtonColor: "#c20001",
+      });
+    }
+  };
+
+  const handleDeleteCategory = async (id) => {
+    const cat = categories.find((c) => c.id === id);
+    if (!cat) return;
+
+    const result = await Swal.fire({
+      icon: "warning",
+      title: "Delete category?",
+      text:
+        "This will remove the category" +
+        (cat.services.length
+          ? " and possibly its services/sub-services depending on backend rules."
+          : "."),
+      showCancelButton: true,
       confirmButtonColor: "#c20001",
+      cancelButtonColor: "#6b7280",
+      confirmButtonText: "Yes, delete",
     });
+
+    if (!result.isConfirmed) return;
+
+    try {
+      await CategoriesAPI.deleteCategory(id);
+      setCategories((prev) => prev.filter((c) => c.id !== id));
+
+      await Swal.fire({
+        icon: "success",
+        title: "Category deleted",
+        confirmButtonColor: "#c20001",
+      });
+    } catch (error) {
+      console.error("Delete category failed", error);
+      await Swal.fire({
+        icon: "error",
+        title: "Delete failed",
+        text: "Could not delete category. Please check dependencies.",
+        confirmButtonColor: "#c20001",
+      });
+    }
   };
 
   // -----------------------------------------------------
@@ -562,7 +462,7 @@ const AdminCategoriesManagementPage = () => {
   // -----------------------------------------------------
   const handleAddService = (categoryId) => {
     setEditingService({ categoryId, service: null });
-    setServiceForm({ name: "", description: "" });
+    setServiceForm({ name: "", description: "", baseRate: "" });
     setIsServiceModalOpen(true);
   };
 
@@ -571,6 +471,7 @@ const AdminCategoriesManagementPage = () => {
     setServiceForm({
       name: service.name,
       description: service.description,
+      baseRate: service.baseRate != null ? String(service.baseRate) : "",
     });
     setIsServiceModalOpen(true);
   };
@@ -586,48 +487,109 @@ const AdminCategoriesManagementPage = () => {
       return;
     }
 
-    setCategories((prev) =>
-      prev.map((category) => {
-        if (category.id !== editingService.categoryId) return category;
+    const baseRateValue =
+      serviceForm.baseRate !== "" ? Number(serviceForm.baseRate) : null;
+    if (
+      serviceForm.baseRate !== "" &&
+      (Number.isNaN(baseRateValue) || baseRateValue < 0)
+    ) {
+      await Swal.fire({
+        icon: "error",
+        title: "Invalid base rate",
+        text: "Base rate must be a non-negative number.",
+        confirmButtonColor: "#c20001",
+      });
+      return;
+    }
 
-        if (editingService.service) {
-          // Update
-          return {
-            ...category,
-            services: category.services.map((s) =>
-              s.id === editingService.service.id
-                ? { ...s, ...serviceForm }
-                : s
-            ),
-          };
-        } else {
-          // Create
-          const newService = {
-            id: `SER${String(Date.now()).slice(-3)}`,
-            ...serviceForm,
-            active: true,
-            subServices: [],
-          };
-          return {
-            ...category,
-            services: [...category.services, newService],
-          };
-        }
-      })
-    );
+    try {
+      setIsSavingService(true);
 
-    await Swal.fire({
-      icon: "success",
-      title: editingService.service
-        ? "Service updated"
-        : "Service created",
-      confirmButtonColor: "#c20001",
-    });
+      if (editingService.service) {
+        // Update
+        const res = await CategoriesAPI.updateService(
+          editingService.service.id,
+          {
+            name: serviceForm.name,
+            description: serviceForm.description,
+            baseRate: baseRateValue,
+          }
+        );
+        const updated = res.data;
 
-    setIsServiceModalOpen(false);
+        setCategories((prev) =>
+          prev.map((category) => {
+            if (category.id !== editingService.categoryId) return category;
+            return {
+              ...category,
+              services: category.services.map((s) =>
+                s.id === editingService.service.id
+                  ? {
+                      ...s,
+                      name: updated.name,
+                      description: updated.description,
+                      baseRate: updated.baseRate,
+                    }
+                  : s
+              ),
+            };
+          })
+        );
+      } else {
+        // Create
+        const res = await CategoriesAPI.createService({
+          categoryId: Number(editingService.categoryId),
+          name: serviceForm.name,
+          description: serviceForm.description,
+          baseRate: baseRateValue,
+        });
+        const created = res.data;
+
+        const newService = {
+          id: String(created.id),
+          categoryId: created.categoryId,
+          name: created.name,
+          description: created.description,
+          baseRate: created.baseRate,
+          active: true,
+          subServices: [],
+        };
+
+        setCategories((prev) =>
+          prev.map((category) =>
+            category.id === editingService.categoryId
+              ? {
+                  ...category,
+                  services: [...category.services, newService],
+                }
+              : category
+          )
+        );
+      }
+
+      await Swal.fire({
+        icon: "success",
+        title: editingService.service ? "Service updated" : "Service created",
+        confirmButtonColor: "#c20001",
+      });
+
+      setIsServiceModalOpen(false);
+    } catch (error) {
+      console.error("Save service failed", error);
+      await Swal.fire({
+        icon: "error",
+        title: "Save failed",
+        text: "Could not save service. Please try again.",
+        confirmButtonColor: "#c20001",
+      });
+    } finally {
+      setIsSavingService(false);
+    }
   };
 
   const handleToggleService = async (categoryId, serviceId) => {
+    // Backend এ service activate/deactivate API নেই – এখন শুধুই
+    // frontend state toggle করছি।
     const category = categories.find((c) => c.id === categoryId);
     const service = category?.services.find((s) => s.id === serviceId);
     if (!category || !service) return;
@@ -635,11 +597,12 @@ const AdminCategoriesManagementPage = () => {
     const willDeactivate = service.active;
 
     const result = await Swal.fire({
-      icon: willDeactivate ? "warning" : "question",
-      title: willDeactivate ? "Deactivate service?" : "Activate service?",
-      text: willDeactivate
-        ? "Customers should not be able to book this service while inactive."
-        : "Service will be available again under this category.",
+      icon: "question",
+      title: willDeactivate
+        ? "Deactivate service (UI only)?"
+        : "Activate service (UI only)?",
+      text:
+        "Backend API does not yet support service active/inactive. This toggle only affects the admin UI state. If you want it persisted, add an isActive field + endpoints.",
       showCancelButton: true,
       confirmButtonColor: "#c20001",
       cancelButtonColor: "#6b7280",
@@ -659,12 +622,54 @@ const AdminCategoriesManagementPage = () => {
         };
       })
     );
+  };
 
-    await Swal.fire({
-      icon: "success",
-      title: willDeactivate ? "Service deactivated" : "Service activated",
+  const handleDeleteService = async (categoryId, serviceId) => {
+    const category = categories.find((c) => c.id === categoryId);
+    const service = category?.services.find((s) => s.id === serviceId);
+    if (!category || !service) return;
+
+    const result = await Swal.fire({
+      icon: "warning",
+      title: "Delete service?",
+      text:
+        "This will delete the service and its sub-services (depending on backend cascade rules).",
+      showCancelButton: true,
       confirmButtonColor: "#c20001",
+      cancelButtonColor: "#6b7280",
+      confirmButtonText: "Yes, delete",
     });
+
+    if (!result.isConfirmed) return;
+
+    try {
+      await CategoriesAPI.deleteService(serviceId);
+
+      setCategories((prev) =>
+        prev.map((cat) =>
+          cat.id === categoryId
+            ? {
+                ...cat,
+                services: cat.services.filter((s) => s.id !== serviceId),
+              }
+            : cat
+        )
+      );
+
+      await Swal.fire({
+        icon: "success",
+        title: "Service deleted",
+        confirmButtonColor: "#c20001",
+      });
+    } catch (error) {
+      console.error("Delete service failed", error);
+      await Swal.fire({
+        icon: "error",
+        title: "Delete failed",
+        text: "Could not delete service. Please check dependencies.",
+        confirmButtonColor: "#c20001",
+      });
+    }
   };
 
   // -----------------------------------------------------
@@ -686,97 +691,145 @@ const AdminCategoriesManagementPage = () => {
     setSubServiceForm({
       name: subService.name,
       description: subService.description,
-      basePrice: String(subService.basePrice),
-      estimatedDuration: subService.estimatedDuration,
+      basePrice:
+        subService.basePrice !== null && subService.basePrice !== undefined
+          ? String(subService.basePrice)
+          : "",
+      estimatedDuration: subService.estimatedDuration || "",
     });
     setIsSubServiceModalOpen(true);
   };
 
   const handleSaveSubService = async () => {
-    if (
-      !subServiceForm.name ||
-      !subServiceForm.description ||
-      !subServiceForm.basePrice ||
-      !subServiceForm.estimatedDuration
-    ) {
+    if (!subServiceForm.name || !subServiceForm.description) {
       await Swal.fire({
         icon: "error",
         title: "Missing fields",
-        text: "Please fill in all sub-service fields.",
+        text: "Please fill in sub-service name and description.",
         confirmButtonColor: "#c20001",
       });
       return;
     }
 
-    const price = parseFloat(subServiceForm.basePrice);
-    if (Number.isNaN(price)) {
+    // basePrice + estimatedDuration এখন শুধুই UI level, কারণ
+    // backend subservice API তে শুধু name + description আছে।
+    const price =
+      subServiceForm.basePrice !== "" ? Number(subServiceForm.basePrice) : null;
+    if (
+      subServiceForm.basePrice !== "" &&
+      (Number.isNaN(price) || price < 0)
+    ) {
       await Swal.fire({
         icon: "error",
         title: "Invalid price",
-        text: "Base price must be a valid number.",
+        text: "Base price must be a non-negative number.",
         confirmButtonColor: "#c20001",
       });
       return;
     }
 
-    setCategories((prev) =>
-      prev.map((category) => {
-        if (category.id !== editingSubService.categoryId) return category;
+    try {
+      setIsSavingSubService(true);
 
-        return {
-          ...category,
-          services: category.services.map((service) => {
-            if (service.id !== editingSubService.serviceId) return service;
+      if (editingSubService.subService) {
+        // Update
+        const res = await CategoriesAPI.updateSubservice(
+          editingSubService.subService.id,
+          {
+            name: subServiceForm.name,
+            description: subServiceForm.description,
+          }
+        );
+        const updated = res.data;
 
-            if (editingSubService.subService) {
-              // Update
-              return {
-                ...service,
-                subServices: service.subServices.map((ss) =>
-                  ss.id === editingSubService.subService.id
-                    ? {
-                        ...ss,
-                        name: subServiceForm.name,
-                        description: subServiceForm.description,
-                        basePrice: price,
-                        estimatedDuration:
-                          subServiceForm.estimatedDuration,
-                      }
-                    : ss
-                ),
-              };
-            } else {
-              // Create
-              const newSub = {
-                id: `SUB${String(Date.now()).slice(-3)}`,
-                name: subServiceForm.name,
-                description: subServiceForm.description,
-                basePrice: price,
-                estimatedDuration: subServiceForm.estimatedDuration,
-                active: true,
-              };
-              return {
-                ...service,
-                subServices: [...service.subServices, newSub],
-              };
-            }
-          }),
+        setCategories((prev) =>
+          prev.map((category) => {
+            if (category.id !== editingSubService.categoryId) return category;
+
+            return {
+              ...category,
+              services: category.services.map((service) => {
+                if (service.id !== editingSubService.serviceId) return service;
+                return {
+                  ...service,
+                  subServices: service.subServices.map((ss) =>
+                    ss.id === editingSubService.subService.id
+                      ? {
+                          ...ss,
+                          name: updated.name,
+                          description: updated.description,
+                          basePrice: price,
+                          estimatedDuration: subServiceForm.estimatedDuration,
+                        }
+                      : ss
+                  ),
+                };
+              }),
+            };
+          })
+        );
+      } else {
+        // Create
+        const res = await CategoriesAPI.createSubservice({
+          serviceId: Number(editingSubService.serviceId),
+          name: subServiceForm.name,
+          description: subServiceForm.description,
+        });
+        const created = res.data;
+
+        const newSub = {
+          id: String(created.id),
+          serviceId: created.serviceId,
+          name: created.name,
+          description: created.description,
+          basePrice: price,
+          estimatedDuration: subServiceForm.estimatedDuration,
+          active: true,
         };
-      })
-    );
 
-    await Swal.fire({
-      icon: "success",
-      title: editingSubService.subService
-        ? "Sub-service updated"
-        : "Sub-service created",
-      confirmButtonColor: "#c20001",
-    });
+        setCategories((prev) =>
+          prev.map((category) => {
+            if (category.id !== editingSubService.categoryId) return category;
 
-    setIsSubServiceModalOpen(false);
+            return {
+              ...category,
+              services: category.services.map((service) =>
+                service.id === editingSubService.serviceId
+                  ? {
+                      ...service,
+                      subServices: [...service.subServices, newSub],
+                    }
+                  : service
+              ),
+            };
+          })
+        );
+      }
+
+      await Swal.fire({
+        icon: "success",
+        title: editingSubService.subService
+          ? "Sub-service updated"
+          : "Sub-service created",
+        confirmButtonColor: "#c20001",
+      });
+
+      setIsSubServiceModalOpen(false);
+    } catch (error) {
+      console.error("Save sub-service failed", error);
+      await Swal.fire({
+        icon: "error",
+        title: "Save failed",
+        text: "Could not save sub-service. Please try again.",
+        confirmButtonColor: "#c20001",
+      });
+    } finally {
+      setIsSavingSubService(false);
+    }
   };
 
   const handleToggleSubService = async (categoryId, serviceId, subId) => {
+    // Backend এ subservice active/deactive নেই – শুধুই UI toggle
     const category = categories.find((c) => c.id === categoryId);
     const service = category?.services.find((s) => s.id === serviceId);
     const sub = service?.subServices.find((ss) => ss.id === subId);
@@ -785,11 +838,12 @@ const AdminCategoriesManagementPage = () => {
     const willDeactivate = sub.active;
 
     const result = await Swal.fire({
-      icon: willDeactivate ? "warning" : "question",
-      title: willDeactivate ? "Deactivate sub-service?" : "Activate sub-service?",
-      text: willDeactivate
-        ? "This option should be hidden from new bookings while inactive."
-        : "Sub-service will be available again under this service.",
+      icon: "question",
+      title: willDeactivate
+        ? "Deactivate sub-service (UI only)?"
+        : "Activate sub-service (UI only)?",
+      text:
+        "Backend API does not yet support sub-service active/inactive. This toggle is UI-only. Add an isActive field + endpoints if you want it persisted.",
       showCancelButton: true,
       confirmButtonColor: "#c20001",
       cancelButtonColor: "#6b7280",
@@ -815,14 +869,62 @@ const AdminCategoriesManagementPage = () => {
         };
       })
     );
+  };
 
-    await Swal.fire({
-      icon: "success",
-      title: willDeactivate
-        ? "Sub-service deactivated"
-        : "Sub-service activated",
+  const handleDeleteSubService = async (categoryId, serviceId, subId) => {
+    const category = categories.find((c) => c.id === categoryId);
+    const service = category?.services.find((s) => s.id === serviceId);
+    const sub = service?.subServices.find((ss) => ss.id === subId);
+    if (!category || !service || !sub) return;
+
+    const result = await Swal.fire({
+      icon: "warning",
+      title: "Delete sub-service?",
+      text: "This will delete the sub-service.",
+      showCancelButton: true,
       confirmButtonColor: "#c20001",
+      cancelButtonColor: "#6b7280",
+      confirmButtonText: "Yes, delete",
     });
+
+    if (!result.isConfirmed) return;
+
+    try {
+      await CategoriesAPI.deleteSubservice(subId);
+
+      setCategories((prev) =>
+        prev.map((cat) => {
+          if (cat.id !== categoryId) return cat;
+          return {
+            ...cat,
+            services: cat.services.map((srv) =>
+              srv.id === serviceId
+                ? {
+                    ...srv,
+                    subServices: srv.subServices.filter(
+                      (ss) => ss.id !== subId
+                    ),
+                  }
+                : srv
+            ),
+          };
+        })
+      );
+
+      await Swal.fire({
+        icon: "success",
+        title: "Sub-service deleted",
+        confirmButtonColor: "#c20001",
+      });
+    } catch (error) {
+      console.error("Delete sub-service failed", error);
+      await Swal.fire({
+        icon: "error",
+        title: "Delete failed",
+        text: "Could not delete sub-service. Please try again.",
+        confirmButtonColor: "#c20001",
+      });
+    }
   };
 
   // -----------------------------------------------------
@@ -830,7 +932,7 @@ const AdminCategoriesManagementPage = () => {
   // -----------------------------------------------------
   const stats = useMemo(() => {
     const totalCategories = categories.length;
-    const activeCategories = categories.filter((c) => c.active).length;
+    const activeCategories = categories.filter((c) => c.isActive).length;
     const totalServices = categories.reduce(
       (sum, cat) => sum + cat.services.length,
       0
@@ -882,14 +984,28 @@ const AdminCategoriesManagementPage = () => {
           </h1>
         </div>
         <p className="text-sm text-gray-600">
-          Manage <span className="font-semibold">Category → Service → Sub-Service</span>{" "}
+          Manage{" "}
+          <span className="font-semibold">
+            Category → Service → Sub-Service
+          </span>{" "}
           including pricing and duration. This feeds your booking app catalog.
         </p>
-        <p className="mt-1 text-xs text-amber-800 bg-amber-50 border border-amber-100 inline-flex items-center px-2 py-1 rounded-lg">
-          Only{" "}
-          <span className="mx-1 font-semibold">Administrators</span>
-          should publish structural changes to production.
-        </p>
+        <div className="mt-2 flex items-center gap-2">
+          <p className="text-xs text-amber-800 bg-amber-50 border border-amber-100 inline-flex items-center px-2 py-1 rounded-lg">
+            Only <span className="mx-1 font-semibold">Administrators</span>
+            should publish structural changes to production.
+          </p>
+          <Button
+            size="sm"
+            variant="outline"
+            className="ml-auto"
+            onClick={loadCategories}
+            disabled={isLoading}
+          >
+            <RefreshCw className="w-3.5 h-3.5 mr-1" />
+            Refresh
+          </Button>
+        </div>
       </div>
 
       {/* Stats */}
@@ -954,322 +1070,382 @@ const AdminCategoriesManagementPage = () => {
               level.
             </CardDescription>
           </div>
-          <Button onClick={handleAddCategory}>
-            <Plus className="w-4 h-4 mr-2" />
-            Add category
-          </Button>
+          <div className="flex gap-2">
+            <Button onClick={handleAddCategory}>
+              <Plus className="w-4 h-4 mr-2" />
+              Add category
+            </Button>
+          </div>
         </CardHeader>
         <CardContent>
-          <div className="space-y-4">
-            {categories.map((category) => (
-              <div
-                key={category.id}
-                className={`border rounded-lg ${
-                  category.active
-                    ? "border-gray-200 bg-white"
-                    : "border-gray-200 bg-gray-50 opacity-70"
-                }`}
-              >
-                {/* Category header */}
-                <div className="p-4">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="flex-1">
-                      <div className="flex flex-wrap items-center gap-3 mb-2">
-                        <button
-                          onClick={() => toggleCategoryExpand(category.id)}
-                          className="hover:bg-gray-100 p-1 rounded transition-colors"
-                        >
-                          {expandedCategories.includes(category.id) ? (
-                            <ChevronDown className="w-5 h-5 text-gray-600" />
-                          ) : (
-                            <ChevronRight className="w-5 h-5 text-gray-600" />
-                          )}
-                        </button>
-                        <span className="text-2xl">{category.icon}</span>
-                        <h3 className="text-sm font-semibold text-[#c20001]">
-                          {category.name}
-                        </h3>
-                        <Badge
-                          className={
-                            category.active
-                              ? "bg-green-100 text-green-800"
-                              : "bg-gray-100 text-gray-700"
-                          }
-                        >
-                          {category.active ? "Active" : "Inactive"}
-                        </Badge>
-                        <Badge className="bg-blue-100 text-blue-800">
-                          {category.services.length} services
-                        </Badge>
+          {isLoading && !categories.length ? (
+            <div className="py-10 text-center text-sm text-gray-500">
+              Loading categories...
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {categories.map((category) => (
+                <div
+                  key={category.id}
+                  className={`border rounded-lg ${
+                    category.isActive
+                      ? "border-gray-200 bg-white"
+                      : "border-gray-200 bg-gray-50 opacity-70"
+                  }`}
+                >
+                  {/* Category header */}
+                  <div className="p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex-1">
+                        <div className="flex flex-wrap items-center gap-3 mb-2">
+                          <button
+                            onClick={() => toggleCategoryExpand(category.id)}
+                            className="hover:bg-gray-100 p-1 rounded transition-colors"
+                          >
+                            {expandedCategories.includes(category.id) ? (
+                              <ChevronDown className="w-5 h-5 text-gray-600" />
+                            ) : (
+                              <ChevronRight className="w-5 h-5 text-gray-600" />
+                            )}
+                          </button>
+                          <span className="text-2xl">
+                            {category.icon || "📂"}
+                          </span>
+                          <h3 className="text-sm font-semibold text-[#c20001]">
+                            {category.name}
+                          </h3>
+                          <Badge
+                            className={
+                              category.isActive
+                                ? "bg-green-100 text-green-800"
+                                : "bg-gray-100 text-gray-700"
+                            }
+                          >
+                            {category.isActive ? "Active" : "Inactive"}
+                          </Badge>
+                          <Badge className="bg-blue-100 text-blue-800">
+                            {category.services.length} services
+                          </Badge>
+                        </div>
+                        <p className="text-sm text-gray-600 ml-9">
+                          {category.description}
+                        </p>
+                        <p className="text-xs text-gray-500 ml-9 mt-1">
+                          ID: {category.id}
+                        </p>
                       </div>
-                      <p className="text-sm text-gray-600 ml-9">
-                        {category.description}
-                      </p>
-                      <p className="text-xs text-gray-500 ml-9 mt-1">
-                        ID: {category.id}
-                      </p>
-                    </div>
-                    <div className="flex flex-col sm:flex-row gap-2">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => handleEditCategory(category)}
-                      >
-                        <Pencil className="w-3.5 h-3.5 mr-1" />
-                        Edit
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => handleToggleCategory(category.id)}
-                      >
-                        {category.active ? "Deactivate" : "Activate"}
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Services */}
-                {expandedCategories.includes(category.id) && (
-                  <div className="px-4 pb-4">
-                    <div className="ml-9 border-t pt-4">
-                      <div className="flex items-center justify-between mb-3">
-                        <h4 className="text-xs font-semibold text-gray-800">
-                          Services
-                        </h4>
+                      <div className="flex flex-col sm:flex-row gap-2">
                         <Button
                           size="sm"
                           variant="outline"
-                          onClick={() => handleAddService(category.id)}
-                          className="text-[#c20001] border-[#c20001]"
+                          onClick={() => handleEditCategory(category)}
                         >
-                          <Plus className="w-3 h-3 mr-1" />
-                          Add service
+                          <Pencil className="w-3.5 h-3.5 mr-1" />
+                          Edit
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleToggleCategory(category.id)}
+                        >
+                          {category.isActive ? "Deactivate" : "Activate"}
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="border-red-500 text-red-600 hover:bg-red-50"
+                          onClick={() => handleDeleteCategory(category.id)}
+                        >
+                          <Trash2 className="w-3.5 h-3.5 mr-1" />
+                          Delete
                         </Button>
                       </div>
+                    </div>
+                  </div>
 
-                      {category.services.length === 0 ? (
-                        <p className="text-sm text-gray-500 text-center py-4">
-                          No services yet. Click{" "}
-                          <span className="font-semibold">Add service</span> to
-                          create one.
-                        </p>
-                      ) : (
-                        <div className="space-y-3">
-                          {category.services.map((service) => (
-                            <div
-                              key={service.id}
-                              className={`border rounded-lg ${
-                                service.active
-                                  ? "border-gray-200 bg-white"
-                                  : "border-gray-200 bg-gray-50 opacity-70"
-                              }`}
-                            >
-                              {/* Service header */}
-                              <div className="p-3">
-                                <div className="flex items-start justify-between gap-3">
-                                  <div className="flex-1">
-                                    <div className="flex items-center gap-2 mb-1">
-                                      <button
-                                        onClick={() =>
-                                          toggleServiceExpand(service.id)
-                                        }
-                                        className="hover:bg-gray-100 p-0.5 rounded transition-colors"
-                                      >
-                                        {expandedServices.includes(
-                                          service.id
-                                        ) ? (
-                                          <ChevronDown className="w-4 h-4 text-gray-600" />
-                                        ) : (
-                                          <ChevronRight className="w-4 h-4 text-gray-600" />
+                  {/* Services */}
+                  {expandedCategories.includes(category.id) && (
+                    <div className="px-4 pb-4">
+                      <div className="ml-9 border-t pt-4">
+                        <div className="flex items-center justify-between mb-3">
+                          <h4 className="text-xs font-semibold text-gray-800">
+                            Services
+                          </h4>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleAddService(category.id)}
+                            className="text-[#c20001] border-[#c20001]"
+                          >
+                            <Plus className="w-3 h-3 mr-1" />
+                            Add service
+                          </Button>
+                        </div>
+
+                        {category.services.length === 0 ? (
+                          <p className="text-sm text-gray-500 text-center py-4">
+                            No services yet. Click{" "}
+                            <span className="font-semibold">Add service</span> to
+                            create one.
+                          </p>
+                        ) : (
+                          <div className="space-y-3">
+                            {category.services.map((service) => (
+                              <div
+                                key={service.id}
+                                className={`border rounded-lg ${
+                                  service.active
+                                    ? "border-gray-200 bg-white"
+                                    : "border-gray-200 bg-gray-50 opacity-70"
+                                }`}
+                              >
+                                {/* Service header */}
+                                <div className="p-3">
+                                  <div className="flex items-start justify-between gap-3">
+                                    <div className="flex-1">
+                                      <div className="flex items-center gap-2 mb-1">
+                                        <button
+                                          onClick={() =>
+                                            toggleServiceExpand(service.id)
+                                          }
+                                          className="hover:bg-gray-100 p-0.5 rounded transition-colors"
+                                        >
+                                          {expandedServices.includes(
+                                            service.id
+                                          ) ? (
+                                            <ChevronDown className="w-4 h-4 text-gray-600" />
+                                          ) : (
+                                            <ChevronRight className="w-4 h-4 text-gray-600" />
+                                          )}
+                                        </button>
+                                        <p className="text-sm text-gray-900">
+                                          {service.name}
+                                        </p>
+                                        <Badge
+                                          className={
+                                            service.active
+                                              ? "bg-green-100 text-green-800"
+                                              : "bg-gray-100 text-gray-700"
+                                          }
+                                        >
+                                          {service.active
+                                            ? "Active"
+                                            : "Inactive"}
+                                        </Badge>
+                                        <Badge className="bg-purple-100 text-purple-800">
+                                          {service.subServices.length} sub-services
+                                        </Badge>
+                                        {service.baseRate != null && (
+                                          <span className="text-[11px] text-gray-500 ml-1">
+                                            Base rate:{" "}
+                                            <span className="text-[#c20001] font-semibold">
+                                              ${service.baseRate}
+                                            </span>
+                                          </span>
                                         )}
-                                      </button>
-                                      <p className="text-sm text-gray-900">
-                                        {service.name}
+                                      </div>
+                                      <p className="text-xs text-gray-600 ml-6">
+                                        {service.description}
                                       </p>
-                                      <Badge
-                                        className={
-                                          service.active
-                                            ? "bg-green-100 text-green-800"
-                                            : "bg-gray-100 text-gray-700"
-                                        }
-                                      >
-                                        {service.active
-                                          ? "Active"
-                                          : "Inactive"}
-                                      </Badge>
-                                      <Badge className="bg-purple-100 text-purple-800">
-                                        {service.subServices.length} sub-services
-                                      </Badge>
+                                      <p className="text-xs text-gray-500 ml-6 mt-0.5">
+                                        ID: {service.id}
+                                      </p>
                                     </div>
-                                    <p className="text-xs text-gray-600 ml-6">
-                                      {service.description}
-                                    </p>
-                                    <p className="text-xs text-gray-500 ml-6 mt-0.5">
-                                      ID: {service.id}
-                                    </p>
-                                  </div>
-                                  <div className="flex flex-col sm:flex-row gap-1">
-                                    <Button
-                                      size="sm"
-                                      variant="outline"
-                                      onClick={() =>
-                                        handleEditService(
-                                          category.id,
-                                          service
-                                        )
-                                      }
-                                    >
-                                      <Pencil className="w-3.5 h-3.5 mr-1" />
-                                      Edit
-                                    </Button>
-                                    <Button
-                                      size="sm"
-                                      variant="outline"
-                                      onClick={() =>
-                                        handleToggleService(
-                                          category.id,
-                                          service.id
-                                        )
-                                      }
-                                    >
-                                      {service.active
-                                        ? "Deactivate"
-                                        : "Activate"}
-                                    </Button>
-                                  </div>
-                                </div>
-                              </div>
-
-                              {/* Sub-services */}
-                              {expandedServices.includes(service.id) && (
-                                <div className="px-3 pb-3">
-                                  <div className="ml-6 border-t pt-3">
-                                    <div className="flex items-center justify-between mb-2">
-                                      <h5 className="text-xs text-gray-700">
-                                        Sub-services
-                                      </h5>
+                                    <div className="flex flex-col sm:flex-row gap-1">
                                       <Button
                                         size="sm"
                                         variant="outline"
                                         onClick={() =>
-                                          handleAddSubService(
+                                          handleEditService(
+                                            category.id,
+                                            service
+                                          )
+                                        }
+                                      >
+                                        <Pencil className="w-3.5 h-3.5 mr-1" />
+                                        Edit
+                                      </Button>
+                                      <Button
+                                        size="sm"
+                                        variant="outline"
+                                        onClick={() =>
+                                          handleToggleService(
                                             category.id,
                                             service.id
                                           )
                                         }
-                                        className="text-[#c20001] border-[#c20001] h-7 text-xs"
                                       >
-                                        <Plus className="w-3 h-3 mr-1" />
-                                        Add sub-service
+                                        {service.active
+                                          ? "Deactivate"
+                                          : "Activate"}
+                                      </Button>
+                                      <Button
+                                        size="sm"
+                                        variant="outline"
+                                        className="border-red-500 text-red-600 hover:bg-red-50"
+                                        onClick={() =>
+                                          handleDeleteService(
+                                            category.id,
+                                            service.id
+                                          )
+                                        }
+                                      >
+                                        <Trash2 className="w-3.5 h-3.5 mr-1" />
+                                        Delete
                                       </Button>
                                     </div>
+                                  </div>
+                                </div>
 
-                                    {service.subServices.length === 0 ? (
-                                      <p className="text-xs text-gray-500 text-center py-3">
-                                        No sub-services yet. Click{" "}
-                                        <span className="font-semibold">
+                                {/* Sub-services */}
+                                {expandedServices.includes(service.id) && (
+                                  <div className="px-3 pb-3">
+                                    <div className="ml-6 border-t pt-3">
+                                      <div className="flex items-center justify-between mb-2">
+                                        <h5 className="text-xs text-gray-700">
+                                          Sub-services
+                                        </h5>
+                                        <Button
+                                          size="sm"
+                                          variant="outline"
+                                          onClick={() =>
+                                            handleAddSubService(
+                                              category.id,
+                                              service.id
+                                            )
+                                          }
+                                          className="text-[#c20001] border-[#c20001] h-7 text-xs"
+                                        >
+                                          <Plus className="w-3 h-3 mr-1" />
                                           Add sub-service
-                                        </span>{" "}
-                                        to create one.
-                                      </p>
-                                    ) : (
-                                      <div className="space-y-2">
-                                        {service.subServices.map((ss) => (
-                                          <div
-                                            key={ss.id}
-                                            className={`p-2 border rounded ${
-                                              ss.active
-                                                ? "border-gray-200 bg-white"
-                                                : "border-gray-200 bg-gray-50 opacity-70"
-                                            }`}
-                                          >
-                                            <div className="flex items-start justify-between gap-3">
-                                              <div className="flex-1">
-                                                <div className="flex items-center gap-2 mb-1">
-                                                  <p className="text-xs font-medium text-gray-900">
-                                                    {ss.name}
+                                        </Button>
+                                      </div>
+
+                                      {service.subServices.length === 0 ? (
+                                        <p className="text-xs text-gray-500 text-center py-3">
+                                          No sub-services yet. Click{" "}
+                                          <span className="font-semibold">
+                                            Add sub-service
+                                          </span>{" "}
+                                          to create one.
+                                        </p>
+                                      ) : (
+                                        <div className="space-y-2">
+                                          {service.subServices.map((ss) => (
+                                            <div
+                                              key={ss.id}
+                                              className={`p-2 border rounded ${
+                                                ss.active
+                                                  ? "border-gray-200 bg-white"
+                                                  : "border-gray-200 bg-gray-50 opacity-70"
+                                              }`}
+                                            >
+                                              <div className="flex items-start justify-between gap-3">
+                                                <div className="flex-1">
+                                                  <div className="flex items-center gap-2 mb-1">
+                                                    <p className="text-xs font-medium text-gray-900">
+                                                      {ss.name}
+                                                    </p>
+                                                    <Badge
+                                                      className={
+                                                        ss.active
+                                                          ? "bg-green-100 text-green-800"
+                                                          : "bg-gray-100 text-gray-700"
+                                                      }
+                                                    >
+                                                      {ss.active
+                                                        ? "Active"
+                                                        : "Inactive"}
+                                                    </Badge>
+                                                  </div>
+                                                  <p className="text-xs text-gray-600 mb-1">
+                                                    {ss.description}
                                                   </p>
-                                                  <Badge
-                                                    className={
-                                                      ss.active
-                                                        ? "bg-green-100 text-green-800"
-                                                        : "bg-gray-100 text-gray-700"
+                                                  <div className="flex flex-wrap items-center gap-3 text-[11px] text-gray-500">
+                                                    {ss.basePrice != null && (
+                                                      <span>
+                                                        Price:{" "}
+                                                        <span className="text-[#c20001] font-semibold">
+                                                          ${ss.basePrice}
+                                                        </span>
+                                                      </span>
+                                                    )}
+                                                    {ss.estimatedDuration && (
+                                                      <span>
+                                                        Duration:{" "}
+                                                        {ss.estimatedDuration}
+                                                      </span>
+                                                    )}
+                                                    <span>ID: {ss.id}</span>
+                                                  </div>
+                                                </div>
+                                                <div className="flex flex-col sm:flex-row gap-1">
+                                                  <Button
+                                                    size="sm"
+                                                    variant="outline"
+                                                    className="h-7"
+                                                    onClick={() =>
+                                                      handleEditSubService(
+                                                        category.id,
+                                                        service.id,
+                                                        ss
+                                                      )
+                                                    }
+                                                  >
+                                                    <Pencil className="w-3.5 h-3.5 mr-1" />
+                                                    Edit
+                                                  </Button>
+                                                  <Button
+                                                    size="sm"
+                                                    variant="outline"
+                                                    className="h-7 text-xs"
+                                                    onClick={() =>
+                                                      handleToggleSubService(
+                                                        category.id,
+                                                        service.id,
+                                                        ss.id
+                                                      )
                                                     }
                                                   >
                                                     {ss.active
-                                                      ? "Active"
-                                                      : "Inactive"}
-                                                  </Badge>
+                                                      ? "Deactivate"
+                                                      : "Activate"}
+                                                  </Button>
+                                                  <Button
+                                                    size="sm"
+                                                    variant="outline"
+                                                    className="h-7 text-xs border-red-500 text-red-600 hover:bg-red-50"
+                                                    onClick={() =>
+                                                      handleDeleteSubService(
+                                                        category.id,
+                                                        service.id,
+                                                        ss.id
+                                                      )
+                                                    }
+                                                  >
+                                                    <Trash2 className="w-3 h-3 mr-1" />
+                                                    Delete
+                                                  </Button>
                                                 </div>
-                                                <p className="text-xs text-gray-600 mb-1">
-                                                  {ss.description}
-                                                </p>
-                                                <div className="flex flex-wrap items-center gap-3 text-[11px] text-gray-500">
-                                                  <span>
-                                                    Price:{" "}
-                                                    <span className="text-[#c20001] font-semibold">
-                                                      ${ss.basePrice}
-                                                    </span>
-                                                  </span>
-                                                  <span>
-                                                    Duration:{" "}
-                                                    {ss.estimatedDuration}
-                                                  </span>
-                                                  <span>ID: {ss.id}</span>
-                                                </div>
-                                              </div>
-                                              <div className="flex flex-col sm:flex-row gap-1">
-                                                <Button
-                                                  size="sm"
-                                                  variant="outline"
-                                                  className="h-7"
-                                                  onClick={() =>
-                                                    handleEditSubService(
-                                                      category.id,
-                                                      service.id,
-                                                      ss
-                                                    )
-                                                  }
-                                                >
-                                                  <Pencil className="w-3.5 h-3.5 mr-1" />
-                                                  Edit
-                                                </Button>
-                                                <Button
-                                                  size="sm"
-                                                  variant="outline"
-                                                  className="h-7 text-xs"
-                                                  onClick={() =>
-                                                    handleToggleSubService(
-                                                      category.id,
-                                                      service.id,
-                                                      ss.id
-                                                    )
-                                                  }
-                                                >
-                                                  {ss.active
-                                                    ? "Deactivate"
-                                                    : "Activate"}
-                                                </Button>
                                               </div>
                                             </div>
-                                          </div>
-                                        ))}
-                                      </div>
-                                    )}
+                                          ))}
+                                        </div>
+                                      )}
+                                    </div>
                                   </div>
-                                </div>
-                              )}
-                            </div>
-                          ))}
-                        </div>
-                      )}
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -1329,7 +1505,8 @@ const AdminCategoriesManagementPage = () => {
               placeholder="e.g. 🔧"
             />
             <p className="mt-1 text-[11px] text-gray-500">
-              Optional. One emoji that visually represents this category.
+              Optional. One emoji that visually represents this category (stored
+              only in admin UI unless backend adds a column).
             </p>
           </div>
 
@@ -1340,7 +1517,7 @@ const AdminCategoriesManagementPage = () => {
             >
               Cancel
             </Button>
-            <Button onClick={handleSaveCategory}>
+            <Button onClick={handleSaveCategory} disabled={isSavingCategory}>
               {editingCategory ? "Update category" : "Create category"}
             </Button>
           </div>
@@ -1354,7 +1531,7 @@ const AdminCategoriesManagementPage = () => {
         title={editingService.service ? "Edit service" : "Add service"}
         description={
           editingService.service
-            ? "Update the service name and description."
+            ? "Update the service name, description and base rate."
             : "Create a mid-level service under this category."
         }
       >
@@ -1388,6 +1565,26 @@ const AdminCategoriesManagementPage = () => {
               placeholder="Explain what is included in this service."
             />
           </div>
+          <div>
+            <Label htmlFor="srv-baseRate">Base rate (optional)</Label>
+            <Input
+              id="srv-baseRate"
+              type="number"
+              min="0"
+              step="0.01"
+              value={serviceForm.baseRate}
+              onChange={(e) =>
+                setServiceForm((prev) => ({
+                  ...prev,
+                  baseRate: e.target.value,
+                }))
+              }
+              placeholder="e.g. 300"
+            />
+            <p className="mt-1 text-[11px] text-gray-500">
+              Stored on the service as <code>baseRate</code> in the API.
+            </p>
+          </div>
 
           <div className="pt-2 flex justify-end gap-2">
             <Button
@@ -1396,7 +1593,7 @@ const AdminCategoriesManagementPage = () => {
             >
               Cancel
             </Button>
-            <Button onClick={handleSaveService}>
+            <Button onClick={handleSaveService} disabled={isSavingService}>
               {editingService.service ? "Update service" : "Create service"}
             </Button>
           </div>
@@ -1414,8 +1611,8 @@ const AdminCategoriesManagementPage = () => {
         }
         description={
           editingSubService.subService
-            ? "Update pricing and description for this sub-service."
-            : "Create the final bookable unit with base price and duration."
+            ? "Update copy and optional pricing/duration for this sub-service."
+            : "Create the final bookable unit with optional base price and duration."
         }
       >
         <div className="space-y-4">
@@ -1450,7 +1647,7 @@ const AdminCategoriesManagementPage = () => {
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <Label htmlFor="sub-price">Base price (USD) *</Label>
+              <Label htmlFor="sub-price">Base price (UI only)</Label>
               <Input
                 id="sub-price"
                 type="number"
@@ -1465,9 +1662,13 @@ const AdminCategoriesManagementPage = () => {
                 }
                 placeholder="0"
               />
+              <p className="mt-1 text-[11px] text-gray-500">
+                Currently stored only in admin UI; backend subservice API takes
+                only name + description.
+              </p>
             </div>
             <div>
-              <Label htmlFor="sub-duration">Estimated duration *</Label>
+              <Label htmlFor="sub-duration">Estimated duration (UI only)</Label>
               <Input
                 id="sub-duration"
                 value={subServiceForm.estimatedDuration}
@@ -1489,7 +1690,10 @@ const AdminCategoriesManagementPage = () => {
             >
               Cancel
             </Button>
-            <Button onClick={handleSaveSubService}>
+            <Button
+              onClick={handleSaveSubService}
+              disabled={isSavingSubService}
+            >
               {editingSubService.subService
                 ? "Update sub-service"
                 : "Create sub-service"}

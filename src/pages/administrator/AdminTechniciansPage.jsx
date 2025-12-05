@@ -1,4 +1,5 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
+import Swal from "sweetalert2";
 import {
   UserCheck,
   UserX,
@@ -18,6 +19,8 @@ import {
   Calendar,
 } from "lucide-react";
 
+import TechniciansAPI from "../../api/techniciansApi";
+
 import BlockTechnicianModal from "../../components/technicians/BlockTechnicianModal";
 import AddEditTechnicianModal from "../../components/technicians/AddEditTechnicianModal";
 import TechnicianWorkloadModal from "../../components/technicians/TechnicianWorkloadModal";
@@ -26,106 +29,8 @@ import TechnicianWorkloadModal from "../../components/technicians/TechnicianWork
 // Global compensation defaults
 // -----------------------------
 export const GLOBAL_COMMISSION_RATE = 10; // %
-export const GLOBAL_BASE_SALARY = 5000;   // $  
+export const GLOBAL_BASE_SALARY = 5000;   // $
 export const GLOBAL_BONUS_RATE = 5;       // %
-
-// -----------------------------
-// Mock Data (replace with API later)
-// -----------------------------
-const initialTechnicians = [
-  {
-    id: "TECH-001",
-    name: "Ahmed Khan",
-    specialty: "Electrical",
-    phone: "+971 50 123 4567",
-    email: "ahmed.khan@example.com",
-    status: "Active", // Active | Blocked
-    blockedReason: "",
-    blockedDate: "",
-    activeWorkOrders: 2,
-    completedJobs: 18,
-    employmentType: "Freelancer", // Freelancer | Internal Employee
-    commissionRate: GLOBAL_COMMISSION_RATE,
-    salary: null,
-    bonusRate: null,
-    hasCompensationOverride: true,
-    commissionRateOverride: 12.5,
-    salaryOverride: null,
-    bonusRateOverride: null,
-    joinDate: "2024-06-01",
-    openWorkOrders: [
-      {
-        id: "WO-1023",
-        status: "Assigned",
-        scheduledDate: "2025-03-10",
-        scheduledTime: "10:30 AM",
-        customerName: "John Doe",
-        category: "Electrical",
-      },
-      {
-        id: "WO-1027",
-        status: "In Progress",
-        scheduledDate: "2025-03-11",
-        scheduledTime: "02:00 PM",
-        customerName: "Sarah Lee",
-        category: "Electrical",
-      },
-    ],
-  },
-  {
-    id: "TECH-002",
-    name: "Maria Garcia",
-    specialty: "Plumbing",
-    phone: "+971 50 987 6543",
-    email: "maria.plumb@example.com",
-    status: "Active",
-    blockedReason: "",
-    blockedDate: "",
-    activeWorkOrders: 1,
-    completedJobs: 25,
-    employmentType: "Internal Employee",
-    commissionRate: null,
-    salary: GLOBAL_BASE_SALARY,
-    bonusRate: GLOBAL_BONUS_RATE,
-    hasCompensationOverride: false,
-    commissionRateOverride: null,
-    salaryOverride: null,
-    bonusRateOverride: null,
-    joinDate: "2023-11-15",
-    openWorkOrders: [
-      {
-        id: "WO-1101",
-        status: "Pending",
-        scheduledDate: "2025-03-12",
-        scheduledTime: "09:00 AM",
-        customerName: "ACME Corp.",
-        category: "Plumbing",
-      },
-    ],
-  },
-  {
-    id: "TECH-003",
-    name: "Omar Ali",
-    specialty: "HVAC",
-    phone: "+971 55 111 2222",
-    email: "omar.hvac@example.com",
-    status: "Blocked",
-    blockedReason: "Repeated no-shows for scheduled jobs.",
-    blockedDate: "2025-01-15",
-    activeWorkOrders: 0,
-    completedJobs: 9,
-    employmentType: "Freelancer",
-    commissionRate: GLOBAL_COMMISSION_RATE,
-    salary: null,
-    bonusRate: null,
-    hasCompensationOverride: false,
-    commissionRateOverride: null,
-    salaryOverride: null,
-    bonusRateOverride: null,
-    joinDate: "2024-01-10",
-    openWorkOrders: [],
-  },
-];
 
 // -----------------------------
 // Small helper components
@@ -199,23 +104,118 @@ function employmentBadge(type) {
 }
 
 // -----------------------------
+// API ⇨ UI mapping helpers
+// -----------------------------
+// এখানে backend response থেকে local technician object বানাচ্ছি.
+// তোমার আসল response অনুযায়ী field নাম গুলো চাইলে adjust করবে।
+function mapApiTechnician(api) {
+  return {
+    id: String(api.id), // অথবা api.employeeCode হলে সেটাও ব্যবহার করতে পারো
+    name: api.fullName || api.name || "Unnamed technician",
+    specialty: api.specialty || api.expertise || "General",
+
+    phone: api.phone || api.phoneNumber || "",
+    email: api.email || "",
+
+    status: api.isBlocked ? "Blocked" : "Active",
+    blockedReason: api.blockedReason || "",
+    blockedDate: api.blockedAt ? api.blockedAt.slice(0, 10) : "",
+
+    activeWorkOrders: api.activeWorkOrdersCount ?? 0,
+    completedJobs: api.completedJobsCount ?? 0,
+
+    employmentType:
+      api.employmentType === "EMPLOYEE"
+        ? "Internal Employee"
+        : "Freelancer",
+
+    commissionRate: api.commissionRate ?? null,
+    salary: api.salary ?? null,
+    bonusRate: api.bonusRate ?? null,
+    hasCompensationOverride: api.hasCompensationOverride ?? false,
+    commissionRateOverride: api.commissionRateOverride ?? null,
+    salaryOverride: api.salaryOverride ?? null,
+    bonusRateOverride: api.bonusRateOverride ?? null,
+
+    joinDate: (api.joinDate || api.createdAt || "").slice(0, 10),
+
+    openWorkOrders: api.openWorkOrders || [],
+  };
+}
+
+// Add/Edit form থেকে payload বানানো
+function buildUserPayloadFromForm(form) {
+  return {
+    fullName: form.name,
+    phone: form.phone,
+    email: form.email,
+    specialty: form.specialty,
+    employmentType:
+      form.employmentType === "Internal Employee" ? "EMPLOYEE" : "FREELANCER",
+    role: "TECH_FREELANCER",
+  };
+}
+
+function buildProfilePayloadFromForm(form) {
+  return {
+    commissionRate: form.commissionRate ?? null,
+    salary: form.salary ?? null,
+    bonusRate: form.bonusRate ?? null,
+    hasCompensationOverride: !!form.hasCompensationOverride,
+    commissionRateOverride: form.commissionRateOverride ?? null,
+    salaryOverride: form.salaryOverride ?? null,
+    bonusRateOverride: form.bonusRateOverride ?? null,
+  };
+}
+
+// -----------------------------
 // Main Page – AdminTechniciansPage
 // -----------------------------
 export default function AdminTechniciansPage() {
-  const [technicians, setTechnicians] = useState(initialTechnicians);
+  const [technicians, setTechnicians] = useState([]);
+
+  const [isLoading, setIsLoading] = useState(false);
+  const [isSavingTech, setIsSavingTech] = useState(false);
+  const [isBlocking, setIsBlocking] = useState(false);
 
   const [searchTerm, setSearchTerm] = useState("");
-  const [typeFilter, setTypeFilter] = useState("all"); // all | freelancer | employee
-  const [selectedSpecs, setSelectedSpecs] = useState([]); // specialization chips
+  const [typeFilter, setTypeFilter] = useState("all");
+  const [selectedSpecs, setSelectedSpecs] = useState([]);
 
   // modal state
   const [blockTarget, setBlockTarget] = useState(null);
-  const [blockMode, setBlockMode] = useState("block"); // block | unblock
+  const [blockMode, setBlockMode] = useState("block");
 
   const [editTarget, setEditTarget] = useState(null);
   const [editOpen, setEditOpen] = useState(false);
 
   const [workloadTarget, setWorkloadTarget] = useState(null);
+
+  // -----------------------------
+  // Load list from API
+  // -----------------------------
+  const loadTechnicians = async () => {
+    try {
+      setIsLoading(true);
+      const res = await TechniciansAPI.listTechnicians();
+      const arr = Array.isArray(res.data) ? res.data : res.data?.data || [];
+      setTechnicians(arr.map(mapApiTechnician));
+    } catch (err) {
+      console.error("Failed to load technicians", err);
+      await Swal.fire({
+        icon: "error",
+        title: "Failed to load technicians",
+        text: "Please check the API or your network and try again.",
+        confirmButtonColor: "#c20001",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadTechnicians();
+  }, []);
 
   // list of all specializations
   const allSpecializations = useMemo(
@@ -277,7 +277,7 @@ export default function AdminTechniciansPage() {
   }, [filteredTechnicians, allSpecializations]);
 
   // -----------------------------
-  // Actions
+  // Filters + export
   // -----------------------------
   const toggleSpec = (spec) => {
     setSelectedSpecs((prev) =>
@@ -329,14 +329,26 @@ export default function AdminTechniciansPage() {
     URL.revokeObjectURL(url);
   };
 
+  // -----------------------------
+  // Block / Unblock from small modal
+  // -----------------------------
   const openBlockModal = (technician, mode) => {
     setBlockTarget(technician);
     setBlockMode(mode);
   };
 
-  const handleConfirmBlockAction = (reason) => {
-    if (!blockTarget) return;
+const handleConfirmBlockAction = async (reason) => {
+  if (!blockTarget) return;
 
+  try {
+    if (blockMode === "block") {
+      // API call
+      await TechniciansAPI.blockTechnician(blockTarget.id, reason);
+    } else {
+      await TechniciansAPI.unblockTechnician(blockTarget.id);
+    }
+
+    // local state update
     setTechnicians((prev) =>
       prev.map((t) => {
         if (t.id !== blockTarget.id) return t;
@@ -350,7 +362,6 @@ export default function AdminTechniciansPage() {
           };
         }
 
-        // unblock
         return {
           ...t,
           status: "Active",
@@ -361,48 +372,246 @@ export default function AdminTechniciansPage() {
     );
 
     setBlockTarget(null);
-  };
+  } catch (err) {
+    console.error(err);
+    await Swal.fire({
+      icon: "error",
+      title: "Action failed",
+      text:
+        err?.response?.data?.message ||
+        "Could not update technician status.",
+      confirmButtonColor: "#c20001",
+    });
+  }
+};
 
+
+  // -----------------------------
+  // Add / Edit technician from big modal
+  // -----------------------------
   const openEditModal = (technician = null) => {
     setEditTarget(technician);
     setEditOpen(true);
   };
 
-  const handleSaveTechnician = (data) => {
+// -----------------------------
+// Actions
+// -----------------------------
+
+const handleSaveTechnician = async (formData) => {
+  try {
+    // UI status → API status
+    const apiStatus =
+      formData.status === "Active" ? "ACTIVE" : "INACTIVE";
+
+    // role determine (এখন সব TECH_FREELANCER, চাইলে employee আলাদা role ব্যবহার করতে পারো)
+    const role =
+      formData.employmentType === "Freelancer"
+        ? "TECH_FREELANCER"
+        : "TECH_FREELANCER"; // TODO: চাইলে এখানে "TECH_EMPLOYEE" ইত্যাদি দিবে
+
+    // --------------------------
+    // 1) basic user payload
+    // --------------------------
+    const userPayload = {
+      name: formData.name,
+      phone: formData.phone,
+      role,
+    };
+
+    if (formData.email) {
+      userPayload.email = formData.email;
+    }
+
+    // --------------------------
+    // 2) profile payload
+    // (backend commissionRate, bonusRate = 0.xx format)
+    // --------------------------
+    const profilePayload = {
+      status: apiStatus,
+    };
+
+    if (formData.employmentType === "Freelancer") {
+      // freelancer → commissionRate use
+      const commissionPercent = formData.hasCompensationOverride
+        ? formData.commissionRateOverride ?? GLOBAL_COMMISSION_RATE
+        : GLOBAL_COMMISSION_RATE;
+
+      profilePayload.commissionRate = commissionPercent / 100;
+      // optional: bonusRate null রাখছি, চাইলে backend যেভাবে handle করে
+      profilePayload.bonusRate = null;
+    } else {
+      // employee → salary + bonus
+      const salary = formData.hasCompensationOverride
+        ? formData.salaryOverride ?? GLOBAL_BASE_SALARY
+        : GLOBAL_BASE_SALARY;
+
+      const bonusPercent = formData.hasCompensationOverride
+        ? formData.bonusRateOverride ?? GLOBAL_BONUS_RATE
+        : GLOBAL_BONUS_RATE;
+
+      profilePayload.salary = salary;
+      profilePayload.bonusRate = bonusPercent / 100;
+      profilePayload.commissionRate = null;
+    }
+
+    // ==========================
+    // EDIT EXISTING TECHNICIAN
+    // ==========================
     if (editTarget) {
-      // update existing
+      // 1) update user
+      await TechniciansAPI.updateTechnician(editTarget.id, userPayload);
+
+      // 2) update profile
+      await TechniciansAPI.updateTechnicianProfile(
+        editTarget.id,
+        profilePayload
+      );
+
+      // 3) local state update (UI)
       setTechnicians((prev) =>
         prev.map((t) =>
           t.id === editTarget.id
             ? {
                 ...t,
-                ...data,
+                name: formData.name,
+                specialty: formData.specialty,
+                phone: formData.phone,
+                email: formData.email,
+                employmentType: formData.employmentType,
+                status: formData.status,
+                joinDate: formData.joinDate,
+                hasCompensationOverride: formData.hasCompensationOverride,
+                commissionRate: formData.employmentType === "Freelancer"
+                  ? GLOBAL_COMMISSION_RATE
+                  : null,
+                salary:
+                  formData.employmentType === "Internal Employee"
+                    ? GLOBAL_BASE_SALARY
+                    : null,
+                bonusRate:
+                  formData.employmentType === "Internal Employee"
+                    ? GLOBAL_BONUS_RATE
+                    : null,
+                commissionRateOverride:
+                  formData.employmentType === "Freelancer"
+                    ? formData.hasCompensationOverride
+                      ? formData.commissionRateOverride
+                      : null
+                    : null,
+                salaryOverride:
+                  formData.employmentType === "Internal Employee"
+                    ? formData.hasCompensationOverride
+                      ? formData.salaryOverride
+                      : null
+                    : null,
+                bonusRateOverride:
+                  formData.employmentType === "Internal Employee"
+                    ? formData.hasCompensationOverride
+                      ? formData.bonusRateOverride
+                      : null
+                    : null,
               }
             : t
         )
       );
+
+      await Swal.fire({
+        icon: "success",
+        title: "Technician updated",
+        confirmButtonColor: "#c20001",
+      });
     } else {
-      // add new
-      const nextNumber = technicians.length + 1;
-      const newId = `TECH-${String(nextNumber).padStart(3, "0")}`;
+      // ==========================
+      // CREATE NEW TECHNICIAN
+      // ==========================
+
+      // 1) create user
+      const { data: createdUser } = await TechniciansAPI.createTechnician(
+        userPayload
+      );
+
+      // 2) create/update profile for this new user
+      await TechniciansAPI.updateTechnicianProfile(
+        createdUser.id,
+        profilePayload
+      );
+
+      // 3) add to UI list
       const newTech = {
-        id: newId,
-        activeWorkOrders: 0,
-        completedJobs: 0,
-        blockedReason: data.status === "Blocked" ? "Blocked by admin" : "",
+        id: createdUser.id,
+        name: createdUser.name,
+        specialty: formData.specialty,
+        phone: createdUser.phone,
+        email: createdUser.email || "",
+        status: formData.status,
+        blockedReason:
+          formData.status === "Blocked" ? "Blocked by admin" : "",
         blockedDate:
-          data.status === "Blocked"
+          formData.status === "Blocked"
             ? new Date().toISOString().split("T")[0]
             : "",
+        activeWorkOrders: 0,
+        completedJobs: 0,
+        employmentType: formData.employmentType,
+        commissionRate:
+          formData.employmentType === "Freelancer"
+            ? GLOBAL_COMMISSION_RATE
+            : null,
+        salary:
+          formData.employmentType === "Internal Employee"
+            ? GLOBAL_BASE_SALARY
+            : null,
+        bonusRate:
+          formData.employmentType === "Internal Employee"
+            ? GLOBAL_BONUS_RATE
+            : null,
+        hasCompensationOverride: formData.hasCompensationOverride,
+        commissionRateOverride:
+          formData.employmentType === "Freelancer" &&
+          formData.hasCompensationOverride
+            ? formData.commissionRateOverride
+            : null,
+        salaryOverride:
+          formData.employmentType === "Internal Employee" &&
+          formData.hasCompensationOverride
+            ? formData.salaryOverride
+            : null,
+        bonusRateOverride:
+          formData.employmentType === "Internal Employee" &&
+          formData.hasCompensationOverride
+            ? formData.bonusRateOverride
+            : null,
+        joinDate: formData.joinDate,
         openWorkOrders: [],
-        ...data,
       };
+
       setTechnicians((prev) => [...prev, newTech]);
+
+      await Swal.fire({
+        icon: "success",
+        title: "Technician created",
+        confirmButtonColor: "#c20001",
+      });
     }
 
+    // modal close
     setEditOpen(false);
     setEditTarget(null);
-  };
+  } catch (err) {
+    console.error(err);
+    await Swal.fire({
+      icon: "error",
+      title: "Save failed",
+      text:
+        err?.response?.data?.message ||
+        "Could not save technician. Please try again.",
+      confirmButtonColor: "#c20001",
+    });
+  }
+};
+
+  
 
   const openWorkloadModal = (technician) => {
     setWorkloadTarget(technician);
@@ -604,6 +813,12 @@ export default function AdminTechniciansPage() {
               {filteredTechnicians.length !== 1 ? "s" : ""} found
             </p>
           </div>
+          {isLoading && (
+            <p className="text-xs text-gray-400 flex items-center gap-1">
+              <Info className="w-3 h-3" />
+              Loading technicians...
+            </p>
+          )}
         </div>
 
         {filteredTechnicians.length === 0 ? (
@@ -639,7 +854,7 @@ export default function AdminTechniciansPage() {
                     <p className="text-xs text-gray-500">{tech.id}</p>
                     <p className="mt-1 text-xs text-gray-500 flex items-center gap-1">
                       <Calendar className="w-3 h-3" />
-                      Joined: {tech.joinDate}
+                      Joined: {tech.joinDate || "-"}
                     </p>
                   </div>
                   <div className="flex flex-col items-end gap-1">
@@ -711,6 +926,8 @@ export default function AdminTechniciansPage() {
                           {tech.hasCompensationOverride &&
                           tech.commissionRateOverride != null
                             ? `${tech.commissionRateOverride}% (override)`
+                            : tech.commissionRate != null
+                            ? `${tech.commissionRate}%`
                             : `${GLOBAL_COMMISSION_RATE}% global`}
                         </span>
                       </>
@@ -721,6 +938,8 @@ export default function AdminTechniciansPage() {
                           {tech.hasCompensationOverride &&
                           tech.salaryOverride != null
                             ? `${tech.salaryOverride.toLocaleString()} AED`
+                            : tech.salary != null
+                            ? `${tech.salary.toLocaleString()} AED`
                             : `${GLOBAL_BASE_SALARY.toLocaleString()} AED`}
                         </span>
                         <span className="flex items-center gap-1 text-blue-700">
@@ -728,6 +947,8 @@ export default function AdminTechniciansPage() {
                           {tech.hasCompensationOverride &&
                           tech.bonusRateOverride != null
                             ? `${tech.bonusRateOverride}%`
+                            : tech.bonusRate != null
+                            ? `${tech.bonusRate}%`
                             : `${GLOBAL_BONUS_RATE}%`}
                         </span>
                       </>
@@ -750,7 +971,8 @@ export default function AdminTechniciansPage() {
                   <button
                     type="button"
                     onClick={() => openEditModal(tech)}
-                    className="flex-1 h-9 rounded-lg border border-gray-300 text-xs font-medium text-gray-700 hover:bg-gray-50"
+                    className="flex-1 h-9 rounded-lg border border-gray-300 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-60"
+                    disabled={isSavingTech || isBlocking}
                   >
                     Edit
                   </button>
@@ -759,7 +981,8 @@ export default function AdminTechniciansPage() {
                     <button
                       type="button"
                       onClick={() => openBlockModal(tech, "block")}
-                      className="flex-1 h-9 rounded-lg border border-red-500 text-xs font-medium text-red-600 hover:bg-red-600 hover:text-white"
+                      className="flex-1 h-9 rounded-lg border border-red-500 text-xs font-medium text-red-600 hover:bg-red-600 hover:text-white disabled:opacity-60 disabled:cursor-not-allowed"
+                      disabled={isBlocking}
                     >
                       Block
                     </button>
@@ -767,7 +990,8 @@ export default function AdminTechniciansPage() {
                     <button
                       type="button"
                       onClick={() => openBlockModal(tech, "unblock")}
-                      className="flex-1 h-9 rounded-lg border border-green-600 text-xs font-medium text-green-700 hover:bg-green-600 hover:text-white"
+                      className="flex-1 h-9 rounded-lg border border-green-600 text-xs font-medium text-green-700 hover:bg-green-600 hover:text-white disabled:opacity-60 disabled:cursor-not-allowed"
+                      disabled={isBlocking}
                     >
                       Unblock
                     </button>
@@ -779,7 +1003,7 @@ export default function AdminTechniciansPage() {
         )}
       </div>
 
-      {/* Modals */}
+      {/* Modals – existing components, kono change লাগে নাই */}
       {blockTarget && (
         <BlockTechnicianModal
           technician={blockTarget}
