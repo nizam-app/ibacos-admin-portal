@@ -1,174 +1,251 @@
-import React, { useEffect, useState } from "react";
-import { UserCheck, UserX, AlertTriangle, X as XIcon } from "lucide-react";
+// src/components/technicians/BlockTechnicianModal.jsx
+import React, { useState } from "react";
 
-function Badge({ className = "", children }) {
-  return (
-    <span
-      className={
-        "inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium " +
-        className
-      }
-    >
-      {children}
-    </span>
-  );
-}
+// --- Icon components (pure SVG + Tailwind) ---
+const X = ({ className = "" }) => (
+  <svg
+    className={className}
+    fill="none"
+    viewBox="0 0 24 24"
+    stroke="currentColor"
+  >
+    <path
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth={2}
+      d="M6 18L18 6M6 6l12 12"
+    />
+  </svg>
+);
 
-export default function BlockTechnicianModal({
-  technician,
-  mode = "block", // "block" | "unblock"
-  onClose,
-  onConfirm,
-}) {
-  const [reason, setReason] = useState("");
+const AlertTriangle = ({ className = "" }) => (
+  <svg
+    className={className}
+    fill="none"
+    viewBox="0 0 24 24"
+    stroke="currentColor"
+  >
+    <path
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth={2}
+      d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+    />
+  </svg>
+);
 
-  useEffect(() => {
-    setReason("");
-  }, [technician, mode]);
+const UserX = ({ className = "" }) => (
+  <svg
+    className={className}
+    fill="none"
+    viewBox="0 0 24 24"
+    stroke="currentColor"
+  >
+    <path
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth={2}
+      d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
+    />
+    <path
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth={2}
+      d="M18 8l-4 4m0-4l4 4"
+    />
+  </svg>
+);
 
-  if (!technician) return null;
+const UserCheck = ({ className = "" }) => (
+  <svg
+    className={className}
+    fill="none"
+    viewBox="0 0 24 24"
+    stroke="currentColor"
+  >
+    <path
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth={2}
+      d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
+    />
+    <path
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth={2}
+      d="M17 11l2 2 4-4"
+    />
+  </svg>
+);
+
+// props: { technician, action, onClose, onConfirm }
+function BlockTechnicianModal({ technician, action, onClose, onConfirm }) {
+  const [blockReason, setBlockReason] = useState("");
+
+  if (!technician || !action) return null;
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    if (mode === "block" && !reason.trim()) return;
-    onConfirm(reason.trim());
+    if (action === "block") {
+      onConfirm(technician.id, blockReason);
+    } else {
+      onConfirm(technician.id);
+    }
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div className="bg-white rounded-2xl shadow-xl max-w-lg w-full overflow-hidden">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+      <div className="w-full max-w-lg rounded-lg bg-white shadow-xl">
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b">
+        <div className="flex items-center justify-between border-b border-gray-200 px-6 py-4">
           <div>
             <h2 className="text-lg font-semibold text-[#c20001]">
-              {mode === "block" ? "Block Technician" : "Unblock Technician"}
+              {action === "block" ? "Block Technician" : "Unblock Technician"}
             </h2>
-            <p className="text-xs text-gray-500">
-              {mode === "block"
-                ? "Prevent this technician from receiving NEW work orders."
-                : "Make this technician available again for work orders."}
+            <p className="text-sm text-gray-600">
+              {action === "block"
+                ? "Prevent this technician from receiving new work orders."
+                : "Restore technician availability for work orders."}
             </p>
           </div>
           <button
+            type="button"
             onClick={onClose}
-            className="text-gray-400 hover:text-gray-600"
+            className="rounded-full p-1 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600"
           >
-            <XIcon className="w-5 h-5" />
+            <X className="h-5 w-5" />
           </button>
         </div>
 
-        {/* Info */}
-        <div className="px-6 py-4 border-b bg-gray-50">
+        {/* Technician Info */}
+        <div className="border-b border-gray-200 bg-gray-50 px-6 py-4">
           <div className="grid grid-cols-2 gap-4 text-sm">
             <div>
               <p className="text-gray-500">Technician Name</p>
-              <p className="font-medium text-gray-900">{technician.name}</p>
+              <p className="font-medium text-[#c20001]">{technician.name}</p>
             </div>
             <div>
               <p className="text-gray-500">Technician ID</p>
-              <p className="font-medium text-gray-900">{technician.id}</p>
+              <p className="font-medium text-gray-800">{technician.id}</p>
             </div>
             <div>
               <p className="text-gray-500">Specialty</p>
-              <p className="font-medium text-gray-900">
-                {technician.specialty}
-              </p>
+              <p className="font-medium text-gray-800">{technician.specialty}</p>
             </div>
             <div>
               <p className="text-gray-500">Active Work Orders</p>
-              <p className="font-medium text-[#c20001]">
+              <p className="font-semibold text-[#c20001]">
                 {technician.activeWorkOrders}
               </p>
             </div>
           </div>
         </div>
 
-        {/* Body */}
-        <form onSubmit={handleSubmit} className="px-6 py-4 space-y-4 text-sm">
-          {mode === "block" ? (
+        {/* Form */}
+        <form onSubmit={handleSubmit} className="space-y-6 px-6 py-5 text-sm">
+          {action === "block" ? (
             <>
-              <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-xs text-red-800 flex gap-3">
-                <AlertTriangle className="w-4 h-4 mt-0.5" />
+              <div className="flex gap-3 rounded-lg border border-red-200 bg-red-50 p-4">
+                <AlertTriangle className="mt-0.5 h-5 w-5 text-red-600" />
                 <div>
-                  <p className="font-semibold mb-1">Important</p>
-                  <ul className="list-disc ml-4 space-y-1">
-                    <li>Technician will not be assigned to new work orders.</li>
+                  <p className="font-semibold text-red-900">
+                    Important Notice
+                  </p>
+                  <p className="mt-1 text-sm text-red-700">
+                    Blocking this technician will:
+                  </p>
+                  <ul className="mt-2 list-inside list-disc text-sm text-red-700">
+                    <li>Prevent them from being assigned to new work orders</li>
                     <li>
-                      Current active work orders ({technician.activeWorkOrders})
-                      stay unchanged.
+                      Not affect their current active work orders (
+                      {technician.activeWorkOrders})
                     </li>
-                    <li>Reason will be stored in audit log.</li>
+                    <li>Notify the technician about their blocked status</li>
                   </ul>
                 </div>
               </div>
 
-              <div>
-                <label className="block text-gray-700 mb-1">
-                  Reason for blocking <span className="text-red-500">*</span>
+              <div className="space-y-2">
+                <label
+                  htmlFor="blockReason"
+                  className="text-sm font-medium text-gray-700"
+                >
+                  Reason for Blocking *
                 </label>
                 <textarea
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#c20001]"
-                  rows={4}
-                  value={reason}
-                  onChange={(e) => setReason(e.target.value)}
-                  placeholder="e.g. repeated no-shows, unacceptable behaviour..."
+                  id="blockReason"
+                  className="h-32 w-full resize-none rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-800 outline-none ring-0 transition focus:border-[#c20001] focus:ring-1 focus:ring-[#c20001]"
+                  placeholder="Please provide a detailed reason for blocking this technician (e.g., performance issues, availability concerns, disciplinary action)..."
+                  value={blockReason}
+                  onChange={(e) => setBlockReason(e.target.value)}
                   required
                 />
-                <p className="text-[11px] text-gray-500 mt-1">
-                  This note can be seen by other admins later.
+                <p className="text-xs text-gray-500">
+                  This reason will be recorded in the system and can be viewed
+                  by administrators.
                 </p>
               </div>
             </>
           ) : (
             <>
-              <div className="p-3 bg-green-50 border border-green-200 rounded-lg text-xs text-green-800 flex gap-3">
-                <UserCheck className="w-4 h-4 mt-0.5" />
+              <div className="flex gap-3 rounded-lg border border-green-200 bg-green-50 p-4">
+                <UserCheck className="mt-0.5 h-5 w-5 text-green-600" />
                 <div>
-                  <p className="font-semibold mb-1">Unblock confirmation</p>
-                  <p>
-                    Technician will be available for new assignments again.
-                    Previous block reason remains in the history.
+                  <p className="font-semibold text-green-900">
+                    Unblock Confirmation
+                  </p>
+                  <p className="mt-1 text-sm text-green-700">
+                    Unblocking this technician will make them available for new
+                    work order assignments.
                   </p>
                 </div>
               </div>
 
               {technician.blockedReason && (
-                <div className="border border-gray-200 rounded-lg p-3 bg-gray-50 text-xs text-gray-700">
-                  <p className="font-semibold mb-1">Previous block reason</p>
-                  <p className="text-[11px] text-gray-500 mb-1">
-                    Blocked on: {technician.blockedDate || "-"}
+                <div className="space-y-2">
+                  <p className="text-sm font-medium text-gray-700">
+                    Previous Block Reason
                   </p>
-                  <p>{technician.blockedReason}</p>
+                  <div className="rounded-md border border-gray-200 bg-gray-100 p-3 text-sm">
+                    <p className="text-xs text-gray-600">
+                      Blocked on: {technician.blockedDate}
+                    </p>
+                    <p className="mt-2 text-gray-800">
+                      {technician.blockedReason}
+                    </p>
+                  </div>
                 </div>
               )}
             </>
           )}
 
-          {/* Footer */}
-          <div className="flex gap-3 pt-3 border-t border-gray-100">
+          {/* Actions */}
+          <div className="flex gap-3 border-t border-gray-200 pt-4">
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 h-10 rounded-lg border border-gray-300 text-sm font-medium text-gray-700 hover:bg-gray-50"
+              className="flex-1 rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
             >
               Cancel
             </button>
+
             <button
               type="submit"
-              className={`flex-1 h-10 rounded-lg text-sm font-medium text-white flex items-center justify-center gap-2 ${
-                mode === "block"
-                  ? "bg-red-600 hover:bg-red-700"
-                  : "bg-green-600 hover:bg-green-700"
+              disabled={action === "block" && !blockReason}
+              className={`flex-1 inline-flex items-center justify-center rounded-md px-4 py-2 text-sm font-semibold text-white transition ${
+                action === "block"
+                  ? "bg-red-600 hover:bg-red-700 disabled:bg-red-300"
+                  : "bg-green-600 hover:bg-green-700 disabled:bg-green-300"
               }`}
             >
-              {mode === "block" ? (
+              {action === "block" ? (
                 <>
-                  <UserX className="w-4 h-4" />
+                  <UserX className="mr-2 h-4 w-4" />
                   Confirm Block
                 </>
               ) : (
                 <>
-                  <UserCheck className="w-4 h-4" />
+                  <UserCheck className="mr-2 h-4 w-4" />
                   Confirm Unblock
                 </>
               )}
@@ -179,3 +256,6 @@ export default function BlockTechnicianModal({
     </div>
   );
 }
+
+export default BlockTechnicianModal;
+export { BlockTechnicianModal };

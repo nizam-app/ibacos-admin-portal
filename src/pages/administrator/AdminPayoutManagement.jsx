@@ -1,18 +1,25 @@
 // src/pages/administrator/AdminPayoutManagement.jsx
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import Swal from "sweetalert2";
+import CommissionsAPI from "../../api/commissionsApi";
 
 // --------------------------------------------------
 // Small Tailwind UI helpers (Card, Button, Badge, etc.)
 // --------------------------------------------------
 const Card = ({ className = "", children }) => (
-  <div className={"bg-white rounded-xl border border-gray-200 shadow-sm " + className}>
+  <div
+    className={
+      "bg-white rounded-xl border border-gray-200 shadow-sm " + className
+    }
+  >
     {children}
   </div>
 );
 
 const CardHeader = ({ className = "", children }) => (
-  <div className={"px-6 pt-5 pb-3 border-b border-gray-100 " + className}>{children}</div>
+  <div className={"px-6 pt-5 pb-3 border-b border-gray-100 " + className}>
+    {children}
+  </div>
 );
 
 const CardContent = ({ className = "", children }) => (
@@ -20,7 +27,9 @@ const CardContent = ({ className = "", children }) => (
 );
 
 const CardTitle = ({ className = "", children }) => (
-  <h2 className={"text-base font-semibold text-gray-900 " + className}>{children}</h2>
+  <h2 className={"text-base font-semibold text-gray-900 " + className}>
+    {children}
+  </h2>
 );
 
 const CardDescription = ({ className = "", children }) => (
@@ -119,7 +128,12 @@ const Modal = ({ open, onClose, children, maxWidth = "max-w-2xl" }) => {
 // Custom SVG icons
 // --------------------------------------------------
 const Wallet = ({ className }) => (
-  <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+  <svg
+    className={className}
+    fill="none"
+    viewBox="0 0 24 24"
+    stroke="currentColor"
+  >
     <path
       strokeLinecap="round"
       strokeLinejoin="round"
@@ -130,7 +144,12 @@ const Wallet = ({ className }) => (
 );
 
 const CalendarIcon = ({ className }) => (
-  <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+  <svg
+    className={className}
+    fill="none"
+    viewBox="0 0 24 24"
+    stroke="currentColor"
+  >
     <path
       strokeLinecap="round"
       strokeLinejoin="round"
@@ -141,7 +160,12 @@ const CalendarIcon = ({ className }) => (
 );
 
 const Clock = ({ className }) => (
-  <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+  <svg
+    className={className}
+    fill="none"
+    viewBox="0 0 24 24"
+    stroke="currentColor"
+  >
     <path
       strokeLinecap="round"
       strokeLinejoin="round"
@@ -152,7 +176,12 @@ const Clock = ({ className }) => (
 );
 
 const DollarSign = ({ className }) => (
-  <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+  <svg
+    className={className}
+    fill="none"
+    viewBox="0 0 24 24"
+    stroke="currentColor"
+  >
     <path
       strokeLinecap="round"
       strokeLinejoin="round"
@@ -163,7 +192,12 @@ const DollarSign = ({ className }) => (
 );
 
 const CheckCircle2 = ({ className }) => (
-  <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+  <svg
+    className={className}
+    fill="none"
+    viewBox="0 0 24 24"
+    stroke="currentColor"
+  >
     <path
       strokeLinecap="round"
       strokeLinejoin="round"
@@ -174,7 +208,12 @@ const CheckCircle2 = ({ className }) => (
 );
 
 const XCircle = ({ className }) => (
-  <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+  <svg
+    className={className}
+    fill="none"
+    viewBox="0 0 24 24"
+    stroke="currentColor"
+  >
     <path
       strokeLinecap="round"
       strokeLinejoin="round"
@@ -185,7 +224,12 @@ const XCircle = ({ className }) => (
 );
 
 const AlertCircle = ({ className }) => (
-  <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+  <svg
+    className={className}
+    fill="none"
+    viewBox="0 0 24 24"
+    stroke="currentColor"
+  >
     <path
       strokeLinecap="round"
       strokeLinejoin="round"
@@ -196,7 +240,12 @@ const AlertCircle = ({ className }) => (
 );
 
 const TrendingUp = ({ className }) => (
-  <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+  <svg
+    className={className}
+    fill="none"
+    viewBox="0 0 24 24"
+    stroke="currentColor"
+  >
     <path
       strokeLinecap="round"
       strokeLinejoin="round"
@@ -207,7 +256,12 @@ const TrendingUp = ({ className }) => (
 );
 
 const DownloadIcon = ({ className }) => (
-  <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+  <svg
+    className={className}
+    fill="none"
+    viewBox="0 0 24 24"
+    stroke="currentColor"
+  >
     <path
       strokeLinecap="round"
       strokeLinejoin="round"
@@ -218,7 +272,12 @@ const DownloadIcon = ({ className }) => (
 );
 
 const SearchIcon = ({ className }) => (
-  <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+  <svg
+    className={className}
+    fill="none"
+    viewBox="0 0 24 24"
+    stroke="currentColor"
+  >
     <path
       strokeLinecap="round"
       strokeLinejoin="round"
@@ -229,13 +288,28 @@ const SearchIcon = ({ className }) => (
 );
 
 const Plus = ({ className }) => (
-  <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+  <svg
+    className={className}
+    fill="none"
+    viewBox="0 0 24 24"
+    stroke="currentColor"
+  >
+    <path
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth={2}
+      d="M12 4v16m8-8H4"
+    />
   </svg>
 );
 
 const Eye = ({ className }) => (
-  <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+  <svg
+    className={className}
+    fill="none"
+    viewBox="0 0 24 24"
+    stroke="currentColor"
+  >
     <path
       strokeLinecap="round"
       strokeLinejoin="round"
@@ -266,166 +340,82 @@ const AdminPayoutManagement = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [filterType, setFilterType] = useState("All"); // All | Commission | Bonus
 
-  // ---------------- Mock JSON data -----------------
-  const [pendingCommissions] = useState([
-    {
-      id: "COMM001",
-      workOrderId: "WO-2025-001",
-      technicianId: "TECH001",
-      technicianName: "Mike Johnson",
-      employmentType: "Freelancer",
-      type: "Commission",
-      amount: 50.0,
-      paymentDate: "2025-11-05",
-      customerName: "Ahmed Hassan",
-      serviceCategory: "AC Service",
-      paymentAmount: 500.0,
-      rate: 10,
-    },
-    {
-      id: "COMM002",
-      workOrderId: "WO-2025-003",
-      technicianId: "TECH002",
-      technicianName: "Sarah Davis",
-      employmentType: "Internal Employee",
-      type: "Bonus",
-      amount: 25.0,
-      paymentDate: "2025-11-05",
-      customerName: "Fatima Ali",
-      serviceCategory: "Plumbing",
-      paymentAmount: 500.0,
-      rate: 5,
-    },
-    {
-      id: "COMM003",
-      workOrderId: "WO-2025-005",
-      technicianId: "TECH001",
-      technicianName: "Mike Johnson",
-      employmentType: "Freelancer",
-      type: "Commission",
-      amount: 40.0,
-      paymentDate: "2025-11-06",
-      customerName: "Mohammed Khalid",
-      serviceCategory: "Electrical",
-      paymentAmount: 400.0,
-      rate: 10,
-    },
-    {
-      id: "COMM004",
-      workOrderId: "WO-2025-007",
-      technicianId: "TECH003",
-      technicianName: "John Smith",
-      employmentType: "Freelancer",
-      type: "Commission",
-      amount: 60.0,
-      paymentDate: "2025-11-07",
-      customerName: "Sara Ahmed",
-      serviceCategory: "Carpentry",
-      paymentAmount: 600.0,
-      rate: 10,
-    },
-  ]);
+  // --------- real data states (no mock) ----------
+  const [pendingCommissions] = useState([]); // will be filled when backend API is ready
+  const [earlyPayoutRequests, setEarlyPayoutRequests] = useState([]);
+  const [payoutBatches] = useState([]); // coming from backend later
+  const [payoutHistory] = useState([]); // coming from backend later
 
-  const [earlyPayoutRequests, setEarlyPayoutRequests] = useState([
-    {
-      id: "EPR001",
-      technicianId: "TECH001",
-      technicianName: "Mike Johnson",
-      requestDate: "2025-11-07",
-      requestedAmount: 90.0,
-      commissionIds: ["COMM001", "COMM003"],
-      reason: "Need urgent funds for personal emergency",
-      status: "Pending",
-    },
-    {
-      id: "EPR002",
-      technicianId: "TECH003",
-      technicianName: "John Smith",
-      requestDate: "2025-11-06",
-      requestedAmount: 60.0,
-      commissionIds: ["COMM004"],
-      reason: "Medical expenses",
-      status: "Pending",
-    },
-  ]);
+  const [payoutRequestsLoading, setPayoutRequestsLoading] = useState(false);
+  const [payoutRequestsError, setPayoutRequestsError] = useState("");
 
-  const [payoutBatches, setPayoutBatches] = useState([
-    {
-      id: "BATCH001",
-      batchNumber: "BATCH-2025-W44",
-      createdDate: "2025-11-01",
-      payoutDate: "2025-11-04",
-      totalAmount: 850.0,
-      technicianCount: 5,
-      commissionsCount: 12,
-      status: "Paid",
-      confirmedBy: "Admin User",
-      confirmedDate: "2025-11-01",
-      paidBy: "Admin User",
-      paidDate: "2025-11-04",
-      payouts: [
-        {
-          technicianId: "TECH001",
-          technicianName: "Mike Johnson",
-          employmentType: "Freelancer",
-          amount: 320.0,
-          commissionsCount: 4,
-          commissionIds: ["C001", "C002", "C003", "C004"],
-        },
-        {
-          technicianId: "TECH002",
-          technicianName: "Sarah Davis",
-          employmentType: "Internal Employee",
-          amount: 180.0,
-          commissionsCount: 3,
-          commissionIds: ["B001", "B002", "B003"],
-        },
-      ],
-    },
-  ]);
+  // ----------------- load payout requests ----------------
+  useEffect(() => {
+    const loadPayoutRequests = async () => {
+      try {
+        setPayoutRequestsLoading(true);
+        setPayoutRequestsError("");
 
-  const [payoutHistory] = useState([
-    {
-      id: "PH001",
-      payoutId: "BATCH001-P001",
-      workOrderId: "WO-2025-001",
-      technicianId: "TECH001",
-      technicianName: "Mike Johnson",
-      type: "Commission",
-      amount: 80.0,
-      paymentDate: "2025-10-28",
-      payoutDate: "2025-11-04",
-      batchNumber: "BATCH-2025-W44",
-      status: "Paid",
-      paidBy: "Admin User",
-    },
-    {
-      id: "PH002",
-      payoutId: "BATCH001-P002",
-      workOrderId: "WO-2025-002",
-      technicianId: "TECH002",
-      technicianName: "Sarah Davis",
-      type: "Bonus",
-      amount: 60.0,
-      paymentDate: "2025-10-29",
-      payoutDate: "2025-11-04",
-      batchNumber: "BATCH-2025-W44",
-      status: "Paid",
-      paidBy: "Admin User",
-    },
-  ]);
+        const { data } = await CommissionsAPI.getPayoutRequests();
+
+        // Map backend shape -> UI shape
+        const mapped =
+          (data || []).map((item) => ({
+            id: item.id,
+            technicianId: item.technicianId,
+            technicianName:
+              item.technician?.name ||
+              (item.technicianId ? `Technician #${item.technicianId}` : "—"),
+            phone: item.technician?.phone || "",
+            requestDate: item.createdAt
+              ? new Date(item.createdAt).toLocaleDateString("en-US")
+              : "",
+            requestedAmount: item.amount ?? 0,
+            // Backend e commissionIds nai, tai empty array rakhlam
+            commissionIds: [],
+            reason: item.reason || "",
+            status: item.status || "PENDING", // PENDING / APPROVED / REJECTED
+            reviewedBy: item.reviewedBy?.name || null,
+            reviewedDate: item.reviewedAt
+              ? new Date(item.reviewedAt).toLocaleDateString("en-US")
+              : null,
+            rejectionReason: null,
+          })) || [];
+
+        setEarlyPayoutRequests(mapped);
+      } catch (err) {
+        console.error("Failed to load payout requests", err);
+        setPayoutRequestsError(
+          err?.response?.data?.message ||
+            "Failed to load payout requests from server."
+        );
+      } finally {
+        setPayoutRequestsLoading(false);
+      }
+    };
+
+    loadPayoutRequests();
+  }, []);
 
   // ----------------- helpers & stats ----------------
   const totalPendingAmount = pendingCommissions.reduce(
     (sum, c) => sum + c.amount,
     0
   );
+
   const totalPendingRequests = earlyPayoutRequests.filter(
-    (r) => r.status === "Pending"
+    (r) => r.status === "PENDING"
   ).length;
+
   const totalEarlyPayoutAmount = earlyPayoutRequests
-    .filter((r) => r.status === "Pending")
-    .reduce((sum, r) => sum + r.requestedAmount, 0);
+    .filter((r) => r.status === "PENDING")
+    .reduce((sum, r) => sum + (r.requestedAmount || 0), 0);
+
+  const totalPaidThisMonthAmount = payoutHistory.reduce(
+    (sum, p) => sum + p.amount,
+    0
+  );
+  const totalPaidThisMonthCount = payoutHistory.length;
 
   const getNextMonday = () => {
     const today = new Date();
@@ -442,8 +432,8 @@ const AdminPayoutManagement = () => {
   const filteredPendingCommissions = pendingCommissions.filter((comm) => {
     const q = searchTerm.toLowerCase();
     const matchName =
-      comm.technicianName.toLowerCase().includes(q) ||
-      comm.workOrderId.toLowerCase().includes(q);
+      (comm.technicianName || "").toLowerCase().includes(q) ||
+      (comm.workOrderId || "").toLowerCase().includes(q);
 
     const matchType =
       filterType === "All" ? true : comm.type === filterType;
@@ -451,84 +441,37 @@ const AdminPayoutManagement = () => {
     return matchName && matchType;
   });
 
-  // ----------------- actions (SweetAlert) ----------------
+  const statusLabel = (status) => {
+    if (status === "PENDING") return "Pending";
+    if (status === "APPROVED") return "Approved";
+    if (status === "REJECTED") return "Rejected";
+    return status || "";
+  };
+
+  // ----------------- actions ----------------
+  // 👉 Batch APIs are not ready yet → only show "Coming soon"
   const handleCreateBatch = () => {
-    if (!pendingCommissions.length) {
-      Swal.fire("No data", "No pending commissions for payout", "warning");
-      return;
-    }
-
-    const map = new Map();
-    pendingCommissions.forEach((c) => {
-      if (!map.has(c.technicianId)) {
-        map.set(c.technicianId, {
-          technicianId: c.technicianId,
-          technicianName: c.technicianName,
-          employmentType: c.employmentType,
-          amount: 0,
-          commissionsCount: 0,
-          commissionIds: [],
-        });
-      }
-      const obj = map.get(c.technicianId);
-      obj.amount += c.amount;
-      obj.commissionsCount += 1;
-      obj.commissionIds.push(c.id);
-    });
-
-    const newBatch = {
-      id: `BATCH${String(payoutBatches.length + 1).padStart(3, "0")}`,
-      batchNumber: `BATCH-2025-W${String(45 + payoutBatches.length)}`,
-      createdDate: new Date().toISOString().split("T")[0],
-      payoutDate: getNextMonday(),
-      totalAmount: totalPendingAmount,
-      technicianCount: map.size,
-      commissionsCount: pendingCommissions.length,
-      status: "Pending",
-      payouts: Array.from(map.values()),
-    };
-
-    setPayoutBatches([newBatch, ...payoutBatches]);
-    setIsCreateBatchOpen(false);
     Swal.fire(
-      "Batch created",
-      `${newBatch.commissionsCount} commissions, $${newBatch.totalAmount.toFixed(
-        2
-      )} scheduled for ${newBatch.payoutDate}`,
-      "success"
+      "Coming soon",
+      "Payout batch creation will be enabled once the backend API is implemented.",
+      "info"
     );
   };
 
-  const handleConfirmBatch = (id) => {
-    setPayoutBatches((prev) =>
-      prev.map((b) =>
-        b.id === id
-          ? {
-              ...b,
-              status: "Confirmed",
-              confirmedBy: "Admin User",
-              confirmedDate: new Date().toISOString().split("T")[0],
-            }
-          : b
-      )
+  const handleConfirmBatch = () => {
+    Swal.fire(
+      "Coming soon",
+      "Confirming payout batches will be available once the backend API is ready.",
+      "info"
     );
-    Swal.fire("Confirmed", "Payout batch confirmed", "success");
   };
 
-  const handleMarkPaid = (id) => {
-    setPayoutBatches((prev) =>
-      prev.map((b) =>
-        b.id === id
-          ? {
-              ...b,
-              status: "Paid",
-              paidBy: "Admin User",
-              paidDate: new Date().toISOString().split("T")[0],
-            }
-          : b
-      )
+  const handleMarkPaid = () => {
+    Swal.fire(
+      "Coming soon",
+      "Marking batches as paid will be available once the backend API is ready.",
+      "info"
     );
-    Swal.fire("Paid", "Payout batch marked as paid", "success");
   };
 
   const openReviewRequest = (request) => {
@@ -537,51 +480,112 @@ const AdminPayoutManagement = () => {
     setIsReviewOpen(true);
   };
 
-  const handleApproveRequest = () => {
+  const handleApproveRequest = async () => {
     if (!selectedRequest) return;
-    setEarlyPayoutRequests((prev) =>
-      prev.map((r) =>
-        r.id === selectedRequest.id
-          ? {
-              ...r,
-              status: "Approved",
-              reviewedBy: "Admin User",
-              reviewedDate: new Date().toISOString().split("T")[0],
-            }
-          : r
-      )
-    );
-    setIsReviewOpen(false);
-    Swal.fire(
-      "Approved",
-      `$${selectedRequest.requestedAmount.toFixed(
-        2
-      )} approved for ${selectedRequest.technicianName}`,
-      "success"
-    );
+
+    try {
+      const confirm = await Swal.fire({
+        title: "Approve payout request?",
+        text: "This will mark the request as APPROVED.",
+        icon: "question",
+        showCancelButton: true,
+        confirmButtonText: "Yes, approve",
+      });
+
+      if (!confirm.isConfirmed) return;
+
+      const { data: updated } = await CommissionsAPI.reviewPayoutRequest(
+        selectedRequest.id,
+        "APPROVE"
+      );
+
+      setEarlyPayoutRequests((prev) =>
+        prev.map((r) =>
+          r.id === updated.id
+            ? {
+                ...r,
+                status: updated.status || "APPROVED",
+                reviewedBy: "Admin User",
+                reviewedDate: updated.reviewedAt
+                  ? new Date(updated.reviewedAt).toLocaleDateString("en-US")
+                  : new Date().toLocaleDateString("en-US"),
+              }
+            : r
+        )
+      );
+
+      setIsReviewOpen(false);
+      Swal.fire(
+        "Approved",
+        `$${(selectedRequest.requestedAmount || 0).toFixed(
+          2
+        )} approved for ${selectedRequest.technicianName}`,
+        "success"
+      );
+    } catch (err) {
+      console.error("Approve payout request failed", err);
+      Swal.fire(
+        "Error",
+        err?.response?.data?.message ||
+          "Failed to approve payout request. Please try again.",
+        "error"
+      );
+    }
   };
 
-  const handleRejectRequest = () => {
+  const handleRejectRequest = async () => {
     if (!selectedRequest) return;
     if (!rejectionReason.trim()) {
       Swal.fire("Required", "Please enter a rejection reason", "error");
       return;
     }
-    setEarlyPayoutRequests((prev) =>
-      prev.map((r) =>
-        r.id === selectedRequest.id
-          ? {
-              ...r,
-              status: "Rejected",
-              reviewedBy: "Admin User",
-              reviewedDate: new Date().toISOString().split("T")[0],
-              rejectionReason,
-            }
-          : r
-      )
-    );
-    setIsReviewOpen(false);
-    Swal.fire("Rejected", "Early payout request rejected", "success");
+
+    try {
+      const confirm = await Swal.fire({
+        title: "Reject payout request?",
+        text: "This will mark the request as REJECTED.",
+        icon: "question",
+        showCancelButton: true,
+        confirmButtonText: "Yes, reject",
+      });
+
+      if (!confirm.isConfirmed) return;
+
+      const reasonText = rejectionReason.trim();
+
+      const { data: updated } = await CommissionsAPI.reviewPayoutRequest(
+        selectedRequest.id,
+        "REJECT",
+        reasonText
+      );
+
+      setEarlyPayoutRequests((prev) =>
+        prev.map((r) =>
+          r.id === updated.id
+            ? {
+                ...r,
+                status: updated.status || "REJECTED",
+                reviewedBy: "Admin User",
+                reviewedDate: updated.reviewedAt
+                  ? new Date(updated.reviewedAt).toLocaleDateString("en-US")
+                  : new Date().toLocaleDateString("en-US"),
+                rejectionReason: reasonText,
+              }
+            : r
+        )
+      );
+
+      setIsReviewOpen(false);
+      Swal.fire("Rejected", "Early payout request rejected", "success");
+    } catch (err) {
+      console.error("Reject payout request failed", err);
+      Swal.fire(
+        "Error",
+        err?.response?.data?.message ||
+          "Failed to reject payout request. Please try again.",
+        "error"
+      );
+    }
   };
 
   const openBatchDetails = (batch) => {
@@ -664,11 +668,15 @@ const AdminPayoutManagement = () => {
           <CardContent className="py-5">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-600">Total Paid (This Month)</p>
-                <p className="text-2xl font-semibold text-green-600 mt-1">
-                  $850.00
+                <p className="text-sm text-gray-600">
+                  Total Paid (This Month)
                 </p>
-                <p className="text-xs text-gray-500 mt-1">12 payouts</p>
+                <p className="text-2xl font-semibold text-green-600 mt-1">
+                  ${totalPaidThisMonthAmount.toFixed(2)}
+                </p>
+                <p className="text-xs text-gray-500 mt-1">
+                  {totalPaidThisMonthCount} payouts
+                </p>
               </div>
               <div className="h-12 w-12 rounded-full bg-green-50 flex items-center justify-center">
                 <TrendingUp className="h-6 w-6 text-green-600" />
@@ -718,13 +726,11 @@ const AdminPayoutManagement = () => {
               <div>
                 <CardTitle>Pending Commissions &amp; Bonuses</CardTitle>
                 <CardDescription>
-                  Verified payments ready for weekly payout
+                  Verified payments ready for weekly payout (API integration
+                  coming soon)
                 </CardDescription>
               </div>
-              <Button
-                onClick={() => setIsCreateBatchOpen(true)}
-                disabled={!pendingCommissions.length}
-              >
+              <Button onClick={() => setIsCreateBatchOpen(true)}>
                 <Plus className="h-4 w-4 mr-1.5" />
                 Create Weekly Batch
               </Button>
@@ -809,7 +815,7 @@ const AdminPayoutManagement = () => {
                           colSpan={8}
                           className="px-4 py-8 text-center text-gray-500"
                         >
-                          No pending commissions found
+                          No pending commissions found (waiting for backend API)
                         </td>
                       </tr>
                     ) : (
@@ -877,7 +883,18 @@ const AdminPayoutManagement = () => {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            {!earlyPayoutRequests.length ? (
+            {payoutRequestsError && (
+              <div className="mb-3 text-sm text-red-600">
+                {payoutRequestsError}
+              </div>
+            )}
+            {payoutRequestsLoading && (
+              <div className="mb-3 text-sm text-gray-500">
+                Loading payout requests...
+              </div>
+            )}
+
+            {!earlyPayoutRequests.length && !payoutRequestsLoading ? (
               <div className="py-8 text-center text-gray-500 text-sm">
                 No early payout requests at the moment
               </div>
@@ -896,21 +913,21 @@ const AdminPayoutManagement = () => {
                           </h3>
                           <Badge
                             className={
-                              r.status === "Pending"
+                              r.status === "PENDING"
                                 ? "bg-yellow-100 text-yellow-800"
-                                : r.status === "Approved"
+                                : r.status === "APPROVED"
                                 ? "bg-green-100 text-green-800"
                                 : "bg-red-100 text-red-800"
                             }
                           >
-                            {r.status}
+                            {statusLabel(r.status)}
                           </Badge>
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
                           <div>
                             <span className="text-gray-600">Request Date:</span>
                             <span className="ml-2 text-gray-900">
-                              {r.requestDate}
+                              {r.requestDate || "—"}
                             </span>
                           </div>
                           <div>
@@ -918,7 +935,7 @@ const AdminPayoutManagement = () => {
                               Requested Amount:
                             </span>
                             <span className="ml-2 text-[#c20001]">
-                              ${r.requestedAmount.toFixed(2)}
+                              ${Number(r.requestedAmount || 0).toFixed(2)}
                             </span>
                           </div>
                           <div>
@@ -926,7 +943,9 @@ const AdminPayoutManagement = () => {
                               Commission IDs:
                             </span>
                             <span className="ml-2 text-gray-900">
-                              {r.commissionIds.join(", ")}
+                              {r.commissionIds?.length
+                                ? r.commissionIds.join(", ")
+                                : "—"}
                             </span>
                           </div>
                           <div>
@@ -934,17 +953,17 @@ const AdminPayoutManagement = () => {
                               Commissions Count:
                             </span>
                             <span className="ml-2 text-gray-900">
-                              {r.commissionIds.length}
+                              {r.commissionIds?.length || 0}
                             </span>
                           </div>
                         </div>
                         <div className="mt-3 p-3 bg-gray-50 border border-gray-200 rounded">
                           <p className="text-sm text-gray-600">Reason:</p>
                           <p className="mt-1 text-sm text-gray-900">
-                            {r.reason}
+                            {r.reason || "—"}
                           </p>
                         </div>
-                        {r.status === "Rejected" && r.rejectionReason && (
+                        {r.status === "REJECTED" && r.rejectionReason && (
                           <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded">
                             <p className="text-sm text-red-600">
                               Rejection Reason:
@@ -956,12 +975,13 @@ const AdminPayoutManagement = () => {
                         )}
                         {r.reviewedBy && (
                           <p className="mt-2 text-xs text-gray-500">
-                            Reviewed by {r.reviewedBy} on {r.reviewedDate}
+                            Reviewed by {r.reviewedBy}{" "}
+                            {r.reviewedDate ? `on ${r.reviewedDate}` : ""}
                           </p>
                         )}
                       </div>
 
-                      {r.status === "Pending" && (
+                      {r.status === "PENDING" && (
                         <Button
                           size="sm"
                           onClick={() => openReviewRequest(r)}
@@ -984,13 +1004,15 @@ const AdminPayoutManagement = () => {
           <CardHeader>
             <CardTitle>Payout Batches</CardTitle>
             <CardDescription>
-              Weekly payout batches scheduled for every Monday
+              Weekly payout batches scheduled for every Monday (API integration
+              coming soon)
             </CardDescription>
           </CardHeader>
           <CardContent>
             {!payoutBatches.length ? (
               <div className="py-8 text-center text-gray-500 text-sm">
-                No payout batches created yet
+                No payout batches available yet. This section will be activated
+                once batch APIs are implemented.
               </div>
             ) : (
               <div className="space-y-4">
@@ -1099,10 +1121,11 @@ const AdminPayoutManagement = () => {
               <div>
                 <CardTitle>Payout History</CardTitle>
                 <CardDescription>
-                  Complete audit trail of all processed payouts
+                  Complete audit trail of all processed payouts (API integration
+                  coming soon)
                 </CardDescription>
               </div>
-              <Button size="sm" variant="outline">
+              <Button size="sm" variant="outline" disabled>
                 <DownloadIcon className="h-4 w-4 mr-1.5" />
                 Export
               </Button>
@@ -1141,7 +1164,8 @@ const AdminPayoutManagement = () => {
                           colSpan={9}
                           className="px-4 py-8 text-center text-gray-500"
                         >
-                          No payout history available
+                          No payout history available yet. This will be powered
+                          by backend APIs.
                         </td>
                       </tr>
                     ) : (
@@ -1228,9 +1252,8 @@ const AdminPayoutManagement = () => {
           <div className="flex items-start gap-2">
             <AlertCircle className="h-4 w-4 mt-0.5" />
             <p>
-              Once created, the batch can be reviewed and confirmed. After
-              confirmation you can mark it as paid on the payout date. Each
-              commission will be paid only once.
+              Batch APIs are not yet available. This flow will be connected to
+              the backend once implemented.
             </p>
           </div>
         </div>
@@ -1271,19 +1294,19 @@ const AdminPayoutManagement = () => {
               <div>
                 <Label>Request Date</Label>
                 <p className="mt-1 text-gray-900">
-                  {selectedRequest.requestDate}
+                  {selectedRequest.requestDate || "—"}
                 </p>
               </div>
               <div>
                 <Label>Requested Amount</Label>
                 <p className="mt-1 text-[#c20001]">
-                  ${selectedRequest.requestedAmount.toFixed(2)}
+                  ${Number(selectedRequest.requestedAmount || 0).toFixed(2)}
                 </p>
               </div>
               <div>
                 <Label>Commissions Count</Label>
                 <p className="mt-1 text-gray-900">
-                  {selectedRequest.commissionIds.length}
+                  {selectedRequest.commissionIds?.length || 0}
                 </p>
               </div>
             </div>
@@ -1291,14 +1314,16 @@ const AdminPayoutManagement = () => {
             <div>
               <Label>Commission IDs</Label>
               <p className="mt-1 text-sm text-gray-900">
-                {selectedRequest.commissionIds.join(", ")}
+                {selectedRequest.commissionIds?.length
+                  ? selectedRequest.commissionIds.join(", ")
+                  : "—"}
               </p>
             </div>
 
             <div>
               <Label>Reason for Early Payout</Label>
               <div className="mt-1 p-3 bg-gray-50 border rounded text-sm text-gray-900">
-                {selectedRequest.reason}
+                {selectedRequest.reason || "—"}
               </div>
             </div>
 
@@ -1317,8 +1342,8 @@ const AdminPayoutManagement = () => {
                 <AlertCircle className="h-4 w-4 mt-0.5" />
                 <p>
                   If approved, this payout will be processed immediately and
-                  marked as paid. The commissions will be removed from the weekly
-                  batch cycle.
+                  marked as paid. The commissions will be removed from the
+                  weekly batch cycle.
                 </p>
               </div>
             </div>
@@ -1432,7 +1457,7 @@ const AdminPayoutManagement = () => {
           >
             Close
           </Button>
-          <Button variant="outline">
+          <Button variant="outline" disabled>
             <DownloadIcon className="h-4 w-4 mr-1.5" />
             Export PDF
           </Button>

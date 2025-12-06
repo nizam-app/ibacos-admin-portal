@@ -16,13 +16,13 @@ import DispatcherDashboard from "../pages/dispatcher/Dashboard";
 import DispatcherServiceRequests from "../pages/dispatcher/DispatcherServiceRequests";
 import DispatcherWorkOrders from "../pages/dispatcher/DispatcherWorkOrders";
 import DispatcherTechnicians from '../pages/dispatcher/DispatcherTechnicians';
-import DispatcherPayments from "../pages/dispatcher/DispatcherPayments";
+// import DispatcherPayments from "../pages/dispatcher/DispatcherPayments";
 
 
 import AdminOverviewPage from "../pages/administrator/AdminOverviewPage";
-import AdminWorkOrders from "../pages/administrator/AdminWorkOrders";
+// import AdminWorkOrders from "../pages/administrator/AdminWorkOrders";
 import AdminPaymentsPage from "../pages/administrator/AdminPaymentsPage";
-import AdminTechniciansPage from "../pages/administrator/AdminTechniciansPage";
+// import AdminTechniciansPage from "../pages/administrator/AdminTechniciansPage";
 
 import ProtectedRoute from "./ProtectedRoute";
 import TechnicianMapView from "../pages/dispatcher/TechnicianMapView";
@@ -76,7 +76,7 @@ const Router = createBrowserRouter([
       { path: "technician-map", element: <TechnicianMapView /> },
       { path: "service-requests", element: <DispatcherServiceRequests /> },
       { path: "work-orders", element: <DispatcherWorkOrders></DispatcherWorkOrders> },
-      { path: "payments", element: <DispatcherPayments></DispatcherPayments> },
+      { path: "payments", element: <AdminPaymentsPage></AdminPaymentsPage> },
       { path: "technicians", element: <DispatcherTechnicians /> },
     ],
   },
@@ -95,7 +95,7 @@ const Router = createBrowserRouter([
       { path: "work-orders", element: <DispatcherWorkOrders /> },
       { path: "payments", element: <AdminPaymentsPage /> },
       { path: "payout-management", element: <AdminPayoutManagement /> },
-      { path: "technicians", element: <AdminTechniciansPage /> },
+      { path: "technicians", element: <DispatcherTechnicians /> },
       { path: "reports", element: <AdminReportsPage/> },
       { path: "audit-log", element: <AdminAuditLogPage/> },
       { path: "user-management", element: <AdminUserManagementPage/> },

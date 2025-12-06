@@ -13,7 +13,7 @@ import {
 
 import DispatcherAPI from "../../api/dispatcherApi";
 import WorkOrderActionsModal from "./WorkOrderActionsModal";
-import PaymentVerificationModal from "./PaymentVerificationModal";
+import PaymentVerificationModal from "../../components/PaymentVerificationModal";
 
 /* ------------------------------------------------------------------
    SMALL UI HELPERS

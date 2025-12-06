@@ -2,22 +2,31 @@
 import axiosClient from "./axiosClient";
 
 const PaymentsAPI = {
-  // Overview stats
-  getPaymentStats: () => axiosClient.get("/payments/stats/overview"),
-
-  // List payments (with optional status, pagination)
-  // status: PENDING_VERIFICATION | VERIFIED | REJECTED
+  // GET /api/payments?status=PENDING_VERIFICATION
   getPayments: (params = {}) =>
     axiosClient.get("/payments", {
       params,
     }),
 
-  // এগুলো ADMIN side এ লাগবে (verify / reject)
-  verifyPayment: (paymentId, body) =>
-    axiosClient.patch(`/payments/${paymentId}/verify`, body),
+  // GET /api/payments/stats/overview
+  getPaymentStats: () => axiosClient.get("/payments/stats/overview"),
 
-  rejectPayment: (paymentId, body) =>
-    axiosClient.patch(`/payments/${paymentId}/reject`, body),
+  // GET /api/payments/:paymentId
+  getPaymentById: (paymentId) => axiosClient.get(`/payments/${paymentId}`),
+
+  // PATCH /api/payments/:paymentId/verify
+  // body:
+  //  { action: "APPROVE" }
+  //  { action: "REJECT", reason: "..." }
+  verifyPayment: (paymentId, action, reason) => {
+    const body = { action }; // APPROVE | REJECT
+
+    if (action === "REJECT" && reason) {
+      body.reason = reason;
+    }
+
+    return axiosClient.patch(`/payments/${paymentId}/verify`, body);
+  },
 };
 
 export default PaymentsAPI;

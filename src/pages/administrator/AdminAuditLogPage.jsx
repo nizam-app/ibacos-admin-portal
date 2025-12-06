@@ -63,8 +63,7 @@ const Button = ({
     "inline-flex items-center justify-center rounded-lg font-medium focus:outline-none focus:ring-2 focus:ring-offset-1 transition-colors";
   const variants = {
     solid: "bg-[#c20001] text-white hover:bg-[#a00001]",
-    outline:
-      "border border-gray-300 text-gray-700 bg-white hover:bg-gray-50",
+    outline: "border border-gray-300 text-gray-700 bg-white hover:bg-gray-50",
     ghost: "text-gray-700 hover:bg-gray-100",
   };
   const sizes = {
@@ -179,8 +178,7 @@ const mockAuditEvents = [
       role: "Dispatcher",
       avatar: "",
     },
-    details:
-      "Assigned to technician Mike Johnson with SLA 2 hours.",
+    details: "Assigned to technician Mike Johnson with SLA 2 hours.",
     metadata: {
       beforeStatus: "Pending",
       afterStatus: "Assigned",
@@ -318,10 +316,7 @@ const AuditEventDrawer = ({ event, onClose }) => {
   return (
     <div className="fixed inset-0 z-40">
       {/* overlay */}
-      <div
-        className="absolute inset-0 bg-black/40"
-        onClick={onClose}
-      />
+      <div className="absolute inset-0 bg-black/40" onClick={onClose} />
       {/* drawer */}
       <div className="absolute right-0 top-0 h-full w-full max-w-md bg-white shadow-xl flex flex-col">
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200">
@@ -380,9 +375,7 @@ const AuditEventDrawer = ({ event, onClose }) => {
 
           {/* details */}
           <div className="space-y-1">
-            <p className="text-xs font-semibold text-gray-700">
-              Details
-            </p>
+            <p className="text-xs font-semibold text-gray-700">Details</p>
             <p className="text-sm text-gray-800 leading-relaxed">
               {event.details}
             </p>
@@ -454,7 +447,10 @@ const AuditEventDrawer = ({ event, onClose }) => {
               <p className="text-xs text-gray-500">Security Context</p>
               {event.metadata.ipAddress && (
                 <p className="text-xs text-gray-700 mt-1">
-                  IP: <span className="font-mono">{event.metadata.ipAddress}</span>
+                  IP:{" "}
+                  <span className="font-mono">
+                    {event.metadata.ipAddress}
+                  </span>
                 </p>
               )}
               {event.metadata.device && (
@@ -520,10 +516,7 @@ const AdminAuditLogPage = () => {
         return false;
       }
 
-      if (
-        roleFilter !== "All" &&
-        event.performedBy.role !== roleFilter
-      ) {
+      if (roleFilter !== "All" && event.performedBy.role !== roleFilter) {
         return false;
       }
 
@@ -593,10 +586,7 @@ const AdminAuditLogPage = () => {
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = `audit_log_${formatDate(
-      new Date(),
-      "yyyy-MM-dd"
-    )}.csv`;
+    link.download = `audit_log_${formatDate(new Date(), "yyyy-MM-dd")}.csv`;
     link.click();
     URL.revokeObjectURL(url);
 
@@ -623,9 +613,7 @@ const AdminAuditLogPage = () => {
       {/* Header */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold text-gray-900">
-            Audit Log
-          </h1>
+          <h1 className="text-2xl font-semibold text-gray-900">Audit Log</h1>
           <p className="text-sm text-gray-600 mt-1">
             Track all payments, payouts, blocking and sensitive changes.
           </p>
@@ -668,9 +656,9 @@ const AdminAuditLogPage = () => {
         </CardHeader>
         <CardContent className="space-y-4">
           {/* row 1 */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-12">
             {/* date range */}
-            <div className="space-y-2">
+            <div className="space-y-2 md:col-span-4">
               <label className="text-sm text-gray-700">Date range</label>
               <div className="flex gap-2">
                 <div className="flex-1 relative">
@@ -705,7 +693,7 @@ const AdminAuditLogPage = () => {
             </div>
 
             {/* event type */}
-            <div className="space-y-2">
+            <div className="space-y-2 md:col-span-5">
               <label className="text-sm text-gray-700">Event type</label>
               <div className="flex flex-wrap gap-2">
                 {["All", "Created", "Dispatched", "Paid Verified"].map(
@@ -713,14 +701,12 @@ const AdminAuditLogPage = () => {
                     <Button
                       key={type}
                       size="sm"
-                      variant={
-                        eventTypeFilter === type ? "solid" : "outline"
-                      }
-                      className={
+                      variant={eventTypeFilter === type ? "solid" : "outline"}
+                      className={`rounded-full px-4 ${
                         eventTypeFilter === type
                           ? "bg-[#c20001] hover:bg-[#c20001]/90 text-white"
-                          : ""
-                      }
+                          : "border-gray-300 text-gray-700"
+                      }`}
                       onClick={() => setEventTypeFilter(type)}
                     >
                       {type}
@@ -731,7 +717,7 @@ const AdminAuditLogPage = () => {
             </div>
 
             {/* Work order ID */}
-            <div className="space-y-2">
+            <div className="space-y-2 md:col-span-3">
               <label className="text-sm text-gray-700">Work Order ID</label>
               <Input
                 placeholder="WO-2025-001..."
@@ -742,35 +728,31 @@ const AdminAuditLogPage = () => {
           </div>
 
           {/* row 2 */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-12">
             {/* role */}
-            <div className="space-y-2">
+            <div className="space-y-2 md:col-span-5">
               <label className="text-sm text-gray-700">User role</label>
-              <div className="flex gap-2">
-                {["All", "Admin", "Dispatcher", "Technician"].map(
-                  (role) => (
-                    <Button
-                      key={role}
-                      size="sm"
-                      variant={
-                        roleFilter === role ? "solid" : "outline"
-                      }
-                      className={
-                        roleFilter === role
-                          ? "bg-[#c20001] hover:bg-[#c20001]/90 text-white"
-                          : ""
-                      }
-                      onClick={() => setRoleFilter(role)}
-                    >
-                      {role === "All" ? "All roles" : role}
-                    </Button>
-                  )
-                )}
+              <div className="flex flex-wrap gap-2">
+                {["All", "Admin", "Dispatcher", "Technician"].map((role) => (
+                  <Button
+                    key={role}
+                    size="sm"
+                    variant={roleFilter === role ? "solid" : "outline"}
+                    className={`rounded-full px-4 ${
+                      roleFilter === role
+                        ? "bg-[#c20001] hover:bg-[#c20001]/90 text-white"
+                        : "border-gray-300 text-gray-700"
+                    }`}
+                    onClick={() => setRoleFilter(role)}
+                  >
+                    {role === "All" ? "All roles" : role}
+                  </Button>
+                ))}
               </div>
             </div>
 
             {/* search */}
-            <div className="space-y-2">
+            <div className="space-y-2 md:col-span-4">
               <label className="text-sm text-gray-700">Search</label>
               <div className="relative">
                 <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
@@ -784,7 +766,7 @@ const AdminAuditLogPage = () => {
             </div>
 
             {/* summary */}
-            <div className="space-y-2">
+            <div className="space-y-2 md:col-span-3">
               <label className="text-sm text-gray-700">Summary</label>
               <div className="h-10 flex items-center rounded-lg border border-dashed border-gray-300 px-3 text-xs text-gray-600 bg-gray-50">
                 Showing{" "}
@@ -838,10 +820,7 @@ const AdminAuditLogPage = () => {
                       <td className="px-4 py-3 align-top">
                         <div className="flex flex-col">
                           <span>
-                            {formatDate(
-                              event.timestamp,
-                              "MMM dd, yyyy"
-                            )}
+                            {formatDate(event.timestamp, "MMM dd, yyyy")}
                           </span>
                           <span className="text-xs text-gray-500">
                             {formatDate(event.timestamp, "HH:mm:ss")}
@@ -858,9 +837,7 @@ const AdminAuditLogPage = () => {
                           type="button"
                           onClick={(e) => {
                             e.stopPropagation();
-                            handleFilterByWorkOrderClick(
-                              event.workOrderId
-                            );
+                            handleFilterByWorkOrderClick(event.workOrderId);
                           }}
                           className="text-[#c20001] hover:underline"
                         >
