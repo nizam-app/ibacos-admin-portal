@@ -33,6 +33,10 @@ const DispatcherAPI = {
     axiosClient.get("/dispatcher/technicians/nearby", {
       params: { latitude, longitude, maxDistance, status },
     }),
+
+  // 🔹 NEW: Work order audit trail (Admin only)
+  getWorkOrderAuditTrail: (woId) =>
+    axiosClient.get(`/admin/work-orders/${woId}/audit-trail`),
 };
 
 export default DispatcherAPI;

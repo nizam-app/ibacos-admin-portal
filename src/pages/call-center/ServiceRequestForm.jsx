@@ -52,10 +52,10 @@ function ServiceRequestForm() {
   const [searchLoading, setSearchLoading] = useState(false);
   const [searchError, setSearchError] = useState("");
 
-  // ---- meta: category / subservice / service ----
+  // ---- meta: category / service / subservice ----
   const [categories, setCategories] = useState([]);
-  const [subservices, setSubservices] = useState([]);
   const [services, setServices] = useState([]);
+  const [subservices, setSubservices] = useState([]);
   const [metaError, setMetaError] = useState("");
 
   // ---- submit status ----
@@ -90,22 +90,49 @@ function ServiceRequestForm() {
     loadCategories();
   }, []);
 
-  // category change → load subservices
+    // category change → load services
   useEffect(() => {
     if (!formData.categoryId) {
-      setSubservices([]);
       setServices([]);
+      setSubservices([]);
       setFormData((prev) => ({
         ...prev,
-        subserviceId: "",
         serviceId: "",
+        subserviceId: "",
       }));
       return;
     }
 
-    const loadSubservices = async () => {
+    const loadServicesForCategory = async () => {
       try {
-        const { data } = await fetchSubservices(formData.categoryId);
+        const { data } = await fetchServices(formData.categoryId);
+        setServices(data || []);
+        setSubservices([]);
+        setFormData((prev) => ({
+          ...prev,
+          serviceId: "",
+          subserviceId: "",
+        }));
+      } catch (err) {
+        console.error("Failed to load services", err);
+        setMetaError("Failed to load services.");
+      }
+    };
+
+    loadServicesForCategory();
+  }, [formData.categoryId]);
+
+  // service change → load subservices
+  useEffect(() => {
+    if (!formData.serviceId) {
+      setSubservices([]);
+      setFormData((prev) => ({ ...prev, subserviceId: "" }));
+      return;
+    }
+
+    const loadSubservicesForService = async () => {
+      try {
+        const { data } = await fetchSubservices(formData.serviceId);
         setSubservices(data || []);
       } catch (err) {
         console.error("Failed to load subservices", err);
@@ -113,29 +140,8 @@ function ServiceRequestForm() {
       }
     };
 
-    loadSubservices();
-  }, [formData.categoryId]);
-
-  // subservice change → load services
-  useEffect(() => {
-    if (!formData.subserviceId) {
-      setServices([]);
-      setFormData((prev) => ({ ...prev, serviceId: "" }));
-      return;
-    }
-
-    const loadServices = async () => {
-      try {
-        const { data } = await fetchServices(formData.subserviceId);
-        setServices(data || []);
-      } catch (err) {
-        console.error("Failed to load services", err);
-        setMetaError("Failed to load services.");
-      }
-    };
-
-    loadServices();
-  }, [formData.subserviceId]);
+    loadSubservicesForService();
+  }, [formData.serviceId]);
 
   // =========================
   //   PHONE → SEARCH CUSTOMER
@@ -309,8 +315,12 @@ function ServiceRequestForm() {
       return;
     }
 
-    if (!formData.categoryId || !formData.subserviceId) {
-      setGlobalError("Please select category and subservice.");
+    if (
+      !formData.categoryId ||
+      !formData.serviceId ||
+      !formData.subserviceId
+    ) {
+      setGlobalError("Please select category, service and subservice.");
       return;
     }
 
@@ -782,8 +792,8 @@ function ServiceRequestForm() {
                       setFormData((prev) => ({
                         ...prev,
                         categoryId: e.target.value,
-                        subserviceId: "",
                         serviceId: "",
+                        subserviceId: "",
                       }))
                     }
                     required
@@ -801,6 +811,43 @@ function ServiceRequestForm() {
 
                 <div className="space-y-1">
                   <label
+                    htmlFor="service"
+                    className="text-xs font-medium text-gray-700"
+                  >
+                    Service *
+                  </label>
+                  <select
+                    id="service"
+                    className="w-full rounded-lg border border-gray-300 bg-gray-50 px-3 py-2 text-sm focus:outline-none focus:ring-[1px] focus:ring-[#ffb111] focus:border-[#ffb111] disabled:bg-gray-100"
+                    value={formData.serviceId}
+                    onChange={(e) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        serviceId: e.target.value,
+                        subserviceId: "",
+                      }))
+                    }
+                    required
+                    disabled={!formData.categoryId || services.length === 0}
+                  >
+                    <option value="" disabled>
+                      {formData.categoryId
+                        ? "Select service"
+                        : "Select category first"}
+                    </option>
+                    {services.map((srv) => (
+                      <option key={srv.id} value={srv.id}>
+                        {srv.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* row 2: service + priority */}
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="space-y-1">
+                  <label
                     htmlFor="subservice"
                     className="text-xs font-medium text-gray-700"
                   >
@@ -814,16 +861,15 @@ function ServiceRequestForm() {
                       setFormData((prev) => ({
                         ...prev,
                         subserviceId: e.target.value,
-                        serviceId: "",
                       }))
                     }
                     required
-                    disabled={!formData.categoryId || subservices.length === 0}
+                    disabled={!formData.serviceId || subservices.length === 0}
                   >
                     <option value="" disabled>
-                      {formData.categoryId
+                      {formData.serviceId
                         ? "Select subservice"
-                        : "Select category first"}
+                        : "Select service first"}
                     </option>
                     {subservices.map((s) => (
                       <option key={s.id} value={s.id}>
@@ -832,42 +878,8 @@ function ServiceRequestForm() {
                     ))}
                   </select>
                 </div>
-              </div>
 
-              {/* row 2: service + priority */}
-              <div className="grid gap-4 md:grid-cols-2">
-                <div className="space-y-1">
-                  <label
-                    htmlFor="service"
-                    className="text-xs font-medium text-gray-700"
-                  >
-                    Service
-                  </label>
-                  <select
-                    id="service"
-                    className="w-full rounded-lg border border-gray-300 bg-gray-50 px-3 py-2 text-sm focus:outline-none focus:ring-[1px] focus:ring-[#ffb111] focus:border-[#ffb111] disabled:bg-gray-100"
-                    value={formData.serviceId}
-                    onChange={(e) =>
-                      setFormData((prev) => ({
-                        ...prev,
-                        serviceId: e.target.value,
-                      }))
-                    }
-                    disabled={!formData.subserviceId || services.length === 0}
-                  >
-                    <option value="">
-                      {formData.subserviceId
-                        ? "Select service (optional)"
-                        : "Select subservice first"}
-                    </option>
-                    {services.map((srv) => (
-                      <option key={srv.id} value={srv.id}>
-                        {srv.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
+                {/* priority select – আগের মতোই */}
                 <div className="space-y-1">
                   <label
                     htmlFor="priority"

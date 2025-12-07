@@ -36,20 +36,21 @@ const Dashboard = () => {
         const data = res.data || []; // API theke asha SR array
 
         const total = data.length;
+        console.log( "call center stats", data)
 
         // 👉 ei mapping ta pore backend final logic onujayi change korte parba
-        const pendingStatuses = ["NEW", "OPEN", "PENDING"];
+        const pendingStatuses = ["PENDING_APPROVAL"];
         const inProgressStatuses = [
           "CONVERTED_TO_WO",
           "IN_PROGRESS",
           "ASSIGNED",
           "UNASSIGNED",
+          "COMPLETED_PENDING_PAYMENT",
         ];
         const resolvedStatuses = [
           "RESOLVED",
           "COMPLETED",
           "COMPLETED_PAID",
-          "COMPLETED_PENDING_PAYMENT",
         ];
 
         let pending = 0;
@@ -149,6 +150,8 @@ const Dashboard = () => {
     },
   ];
 
+
+  console.log("summaryCards", summaryCards)
   const todayStats = {
     openToday: summary.openToday,
     // Backend jokhon avg dispatch time dibe, ekhane replace korbe

@@ -20,9 +20,7 @@ import DispatcherTechnicians from '../pages/dispatcher/DispatcherTechnicians';
 
 
 import AdminOverviewPage from "../pages/administrator/AdminOverviewPage";
-// import AdminWorkOrders from "../pages/administrator/AdminWorkOrders";
 import AdminPaymentsPage from "../pages/administrator/AdminPaymentsPage";
-// import AdminTechniciansPage from "../pages/administrator/AdminTechniciansPage";
 
 import ProtectedRoute from "./ProtectedRoute";
 import TechnicianMapView from "../pages/dispatcher/TechnicianMapView";

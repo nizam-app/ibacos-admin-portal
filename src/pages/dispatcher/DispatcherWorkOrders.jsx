@@ -9,6 +9,9 @@ import {
   XCircle,
   Search,
   DollarSign,
+  ChevronDown,
+  ChevronUp,
+  FileText,
 } from "lucide-react";
 
 import DispatcherAPI from "../../api/dispatcherApi";
@@ -95,13 +98,57 @@ const mapNearbyTech = (t) => ({
 });
 
 /* ------------------------------------------------------------------
+   TIMELINE / AUDIT HELPERS
+-------------------------------------------------------------------*/
+
+const mapTimelineEventLabel = (event) => {
+  switch (event) {
+    case "PAYMENT_VERIFIED":
+      return "Paid Verified";
+    case "PAYMENT_UPLOADED":
+      return "Payment Proof Uploaded";
+    case "DISPATCHED":
+      return "Dispatched";
+    case "ACCEPTED":
+      return "Accepted";
+    case "STARTED":
+      return "Work Started";
+    case "COMPLETED":
+      return "Completed";
+    case "CREATED":
+      return "Created";
+    default:
+      return event?.replace(/_/g, " ") || "Event";
+  }
+};
+
+const getTimelinePillClass = (event) => {
+  switch (event) {
+    case "PAYMENT_VERIFIED":
+      return "bg-green-100 text-green-800";
+    case "PAYMENT_UPLOADED":
+      return "bg-amber-100 text-amber-800";
+    case "DISPATCHED":
+      return "bg-purple-100 text-purple-800";
+    case "COMPLETED":
+      return "bg-blue-100 text-blue-800";
+    default:
+      return "bg-gray-100 text-gray-800";
+  }
+};
+
+/* ------------------------------------------------------------------
    MAIN PAGE – DISPATCHER WORK ORDERS
 -------------------------------------------------------------------*/
 
 export default function DispatcherWorkOrders() {
   const [workOrders, setWorkOrders] = useState([]);
 
-  // 🔢 tab counts আলাদা state এ রাখছি
+  // 🔹 current user role (ADMIN / DISPATCHER)
+  const [userRole, setUserRole] = useState(null);
+  const isAdmin = userRole === "ADMIN";
+
+  // 🔢 tab counts
   const [statusCounts, setStatusCounts] = useState({
     all: 0,
     pending: 0,
@@ -129,6 +176,25 @@ export default function DispatcherWorkOrders() {
 
   const [techLoading, setTechLoading] = useState(false);
   const [techError, setTechError] = useState("");
+
+  // 🔹 audit-trail state (per work-order)
+  const [auditExpanded, setAuditExpanded] = useState({}); // { [woId]: bool }
+  const [auditData, setAuditData] = useState({}); // { [woId]: payload }
+  const [auditLoading, setAuditLoading] = useState({}); // { [woId]: bool }
+  const [auditError, setAuditError] = useState({}); // { [woId]: string }
+
+  /* ------------ Load current user role ------------- */
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem("user");
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        setUserRole(parsed.role || parsed.user_type || null);
+      }
+    } catch (e) {
+      console.error("Failed to parse user from localStorage", e);
+    }
+  }, []);
 
   /* ------------ Fetch helpers ------------- */
 
@@ -175,18 +241,18 @@ export default function DispatcherWorkOrders() {
       priority: priorityLabel,
       notes: wo.notes || "",
 
-      paymentRecord: null, // later use
+      paymentRecord: null, // placeholder – future use
 
       raw: wo,
     };
   };
 
-  // 🔢 আলাদা API call দিয়ে সব status এর count বের করছি
+  // 🔢 status counts
   const loadCounts = async () => {
     try {
       const res = await DispatcherAPI.getWorkOrders({
         page: 1,
-        limit: 1000, // reasonable upper bound
+        limit: 1000,
       });
 
       const data = res.data;
@@ -226,7 +292,6 @@ export default function DispatcherWorkOrders() {
       setStatusCounts(counts);
     } catch (err) {
       console.error("Failed to load status counts", err);
-      // counts না পেলে UI তে পুরোনো মান দেখাবে, এটা ঠিক আছে
     }
   };
 
@@ -236,7 +301,6 @@ export default function DispatcherWorkOrders() {
       setError("");
 
       const statusParam = mapLabelToBackendStatus(tab);
-
       const params = { page: pageToLoad, limit };
       if (statusParam) params.status = statusParam;
 
@@ -303,9 +367,67 @@ export default function DispatcherWorkOrders() {
     }
   };
 
-  // mount + tab change → list + counts দুটোই রিফ্রেশ
+  // 🔹 load audit trail for a single work-order (Admin only)
+  const loadAuditTrail = async (woId) => {
+    if (!isAdmin) return;
+
+    try {
+      setAuditLoading((prev) => ({ ...prev, [woId]: true }));
+      setAuditError((prev) => ({ ...prev, [woId]: "" }));
+
+      const res = await DispatcherAPI.getWorkOrderAuditTrail(woId);
+      const payload = res.data;
+
+      const timeline = Array.isArray(payload.timeline)
+        ? [...payload.timeline].sort(
+            (a, b) => new Date(b.timestamp) - new Date(a.timestamp)
+          )
+        : [];
+
+      const payments = Array.isArray(payload.payments)
+        ? payload.payments
+        : [];
+
+      setAuditData((prev) => ({
+        ...prev,
+        [woId]: {
+          ...payload,
+          timeline,
+          payments,
+        },
+      }));
+    } catch (err) {
+      console.error("Failed to load audit trail", err);
+      setAuditError((prev) => ({
+        ...prev,
+        [woId]:
+          err.response?.data?.message ||
+          "Failed to load audit trail. Please try again.",
+      }));
+    } finally {
+      setAuditLoading((prev) => ({ ...prev, [woId]: false }));
+    }
+  };
+
+  const toggleAuditTrail = (woId) => {
+    if (!isAdmin) return;
+    const isOpen = !!auditExpanded[woId];
+    const willOpen = !isOpen;
+
+    // first time open -> fetch if not loaded
+    if (willOpen && !auditData[woId] && !auditLoading[woId]) {
+      loadAuditTrail(woId);
+    }
+
+    setAuditExpanded((prev) => ({
+      ...prev,
+      [woId]: willOpen,
+    }));
+  };
+
+  // mount + tab change → list + counts refresh
   useEffect(() => {
-    loadCounts(); // tab বদলালেও counts আবার fresh নেবে
+    loadCounts();
     loadWorkOrders(1, activeTab);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab]);
@@ -327,7 +449,7 @@ export default function DispatcherWorkOrders() {
   const getPriorityColor = (priority) => {
     switch (priority) {
       case "High":
-        return "bg-green-100 text-green-800"; // তোমার UI অনুযায়ী চাইলে বদলাও
+        return "bg-green-100 text-green-800";
       case "Medium":
         return "bg-orange-100 text-orange-800";
       case "Low":
@@ -350,11 +472,9 @@ export default function DispatcherWorkOrders() {
       );
     }
 
-    // এখানে আবার status filter করার দরকার নেই, কারণ API ই tab অনুযায়ী filter করে দিচ্ছে
     return list;
   }, [workOrders, searchQuery]);
 
-  // এখন থেকে tab count সবসময় statusCounts থেকে আসবে
   const countByStatus = (statusKey) => {
     switch (statusKey) {
       case "all":
@@ -446,7 +566,6 @@ export default function DispatcherWorkOrders() {
       });
 
       closeModals();
-      // action এর পরে list + counts আবার fresh নেব
       loadCounts();
       loadWorkOrders(1, activeTab);
     } catch (err) {
@@ -526,227 +645,361 @@ export default function DispatcherWorkOrders() {
 
     return (
       <div className="space-y-4">
-        {list.map((wo) => (
-          <div
-            key={wo.id}
-            className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm hover:bg-gray-50"
-          >
-            {/* Top row */}
-            <div className="mb-3 flex items-start justify-between">
-              <div>
-                <h3 className="mb-1 text-sm font-semibold text-[#c20001]">
-                  {wo.woNumber || `WO-${wo.id}`}
-                </h3>
-                <p className="text-xs text-gray-600">SR: {wo.srId}</p>
-              </div>
-              <Badge className={getPriorityColor(wo.priority)}>
-                {wo.priority} Priority
-              </Badge>
-            </div>
+        {list.map((wo) => {
+          const audit = auditData[wo.id];
+          const isAuditOpen = !!auditExpanded[wo.id];
 
-            {/* Customer / category */}
-            <div className="mb-3 grid grid-cols-1 gap-3 text-sm text-gray-900 md:grid-cols-2">
-              <div>
-                <p className="text-xs text-gray-600">Customer</p>
-                <p>{wo.customerName}</p>
-              </div>
-              <div>
-                <p className="text-xs text-gray-600">Category</p>
-                <p>{wo.category}</p>
-              </div>
-            </div>
-
-            {/* Meta line */}
-            <div className="flex flex-wrap gap-4 text-xs text-gray-600">
-              <div className="flex items-center gap-1">
-                <Calendar className="h-4 w-4" />
-                <span>{wo.scheduledDate}</span>
-              </div>
-              <div className="flex items-center gap-1">
-                <Clock className="h-4 w-4" />
-                <span>{wo.scheduledTime}</span>
-              </div>
-              {wo.assignedTechnician ? (
-                <div className="flex items-center gap-1">
-                  <User className="h-4 w-4" />
-                  <span>{getTechnicianName(wo.assignedTechnician)}</span>
+          return (
+            <div
+              key={wo.id}
+              className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm hover:bg-gray-50"
+            >
+              {/* Top row */}
+              <div className="mb-3 flex items-start justify-between">
+                <div>
+                  <h3 className="mb-1 text-sm font-semibold text-[#c20001]">
+                    {wo.woNumber || `WO-${wo.id}`}
+                  </h3>
+                  <p className="text-xs text-gray-600">SR: {wo.srId}</p>
                 </div>
-              ) : (
-                <div className="flex items-center gap-1 text-orange-600">
-                  <User className="h-4 w-4" />
-                  <span>Unassigned</span>
+                <Badge className={getPriorityColor(wo.priority)}>
+                  {wo.priority} Priority
+                </Badge>
+              </div>
+
+              {/* Customer / category */}
+              <div className="mb-3 grid grid-cols-1 gap-3 text-sm text-gray-900 md:grid-cols-2">
+                <div>
+                  <p className="text-xs text-gray-600">Customer</p>
+                  <p>{wo.customerName}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-600">Category</p>
+                  <p>{wo.category}</p>
+                </div>
+              </div>
+
+              {/* Meta line */}
+              <div className="flex flex-wrap gap-4 text-xs text-gray-600">
+                <div className="flex items-center gap-1">
+                  <Calendar className="h-4 w-4" />
+                  <span>{wo.scheduledDate}</span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <Clock className="h-4 w-4" />
+                  <span>{wo.scheduledTime}</span>
+                </div>
+                {wo.assignedTechnician ? (
+                  <div className="flex items-center gap-1">
+                    <User className="h-4 w-4" />
+                    <span>{getTechnicianName(wo.assignedTechnician)}</span>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-1 text-orange-600">
+                    <User className="h-4 w-4" />
+                    <span>Unassigned</span>
+                  </div>
+                )}
+                <div className="flex items-center gap-1">
+                  <Clock className="h-4 w-4" />
+                  <span>{wo.estimatedDuration}h duration</span>
+                </div>
+              </div>
+
+              {/* Notes */}
+              {wo.notes && (
+                <div className="mt-3 border-t border-gray-200 pt-3">
+                  <p className="text-xs text-gray-600">Notes</p>
+                  <p className="text-sm text-gray-700">{wo.notes}</p>
                 </div>
               )}
-              <div className="flex items-center gap-1">
-                <Clock className="h-4 w-4" />
-                <span>{wo.estimatedDuration}h duration</span>
-              </div>
-            </div>
 
-            {/* Notes */}
-            {wo.notes && (
-              <div className="mt-3 border-t border-gray-200 pt-3">
-                <p className="text-xs text-gray-600">Notes</p>
-                <p className="text-sm text-gray-700">{wo.notes}</p>
-              </div>
-            )}
-
-            {/* Footer */}
-            {wo.status !== "Cancelled" && (
-              <div className="mt-4 border-t border-gray-200 pt-4">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  {/* Left: payment status + action icons */}
-                  <div className="flex items-center gap-2">
-                    {/* Payment badge for completed */}
-                    {wo.status === "Completed" && (() => {
-                      const label = getPaymentStatusLabel(wo);
-                      if (label === "Paid Verified") {
-                        return (
-                          <Badge className="bg-green-100 text-green-800">
-                            <DollarSign className="mr-1 h-3 w-3" />
-                            Paid Verified
-                          </Badge>
-                        );
-                      }
-                      if (wo.paymentRecord?.paymentStatus === "Rejected") {
-                        return (
-                          <div className="group relative inline-flex">
-                            <Badge className="cursor-help bg-red-100 text-red-800">
-                              <DollarSign className="mr-1 h-3 w-3" />
-                              Payment Rejected
-                            </Badge>
-                            {wo.paymentRecord.rejectionReason && (
-                              <div className="pointer-events-none absolute bottom-full left-0 z-50 mb-2 hidden max-w-xs whitespace-nowrap rounded bg-gray-900 px-3 py-2 text-xs text-white group-hover:block">
-                                {wo.paymentRecord.rejectionReason}
+              {/* Footer (actions + payment) */}
+              {wo.status !== "Cancelled" && (
+                <div className="mt-4 border-t border-gray-200 pt-4">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    {/* Left: payment status + action icons */}
+                    <div className="flex items-center gap-2">
+                      {/* Payment badge for completed */}
+                      {wo.status === "Completed" &&
+                        (() => {
+                          const label = getPaymentStatusLabel(wo);
+                          if (label === "Paid Verified") {
+                            return (
+                              <Badge className="bg-green-100 text-green-800">
+                                <DollarSign className="mr-1 h-3 w-3" />
+                                Paid Verified
+                              </Badge>
+                            );
+                          }
+                          if (wo.paymentRecord?.paymentStatus === "Rejected") {
+                            return (
+                              <div className="group relative inline-flex">
+                                <Badge className="cursor-help bg-red-100 text-red-800">
+                                  <DollarSign className="mr-1 h-3 w-3" />
+                                  Payment Rejected
+                                </Badge>
+                                {wo.paymentRecord.rejectionReason && (
+                                  <div className="pointer-events-none absolute bottom-full left-0 z-50 mb-2 hidden max-w-xs whitespace-nowrap rounded bg-gray-900 px-3 py-2 text-xs text-white group-hover:block">
+                                    {wo.paymentRecord.rejectionReason}
+                                  </div>
+                                )}
                               </div>
-                            )}
-                          </div>
+                            );
+                          }
+                          return (
+                            <Badge className="bg-yellow-100 text-yellow-800">
+                              <DollarSign className="mr-1 h-3 w-3" />
+                              Pending Payment
+                            </Badge>
+                          );
+                        })()}
+
+                      {/* Dispatcher actions (non-completed) */}
+                      {wo.status !== "Completed" && (
+                        <div className="flex gap-1">
+                          {/* 🔁 Assign / Reassign – এখন Pending (UNASSIGNED) থাকলেও button থাকবে */}
+                          {(wo.status === "Pending" ||
+                            wo.status === "Assigned" ||
+                            wo.status === "In Progress") && (
+                            <div className="group relative">
+                              <button
+                                type="button"
+                                onClick={() => openAction(wo, "reassign")}
+                                className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-gray-300 bg-white text-xs text-gray-700 transition hover:bg-gray-100"
+                              >
+                                <RefreshCw className="h-4 w-4" />
+                              </button>
+                              <div className="pointer-events-none absolute bottom-full left-1/2 z-50 mb-1 hidden -translate-x-1/2 rounded bg-gray-900 px-2 py-1 text-xs text-white group-hover:block">
+                                {wo.status === "Pending"
+                                  ? "Assign"
+                                  : "Reassign"}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Reschedule */}
+                          {(wo.status === "Pending" ||
+                            wo.status === "Assigned" ||
+                            wo.status === "In Progress") && (
+                            <div className="group relative">
+                              <button
+                                type="button"
+                                onClick={() => openAction(wo, "reschedule")}
+                                className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-gray-300 bg-white text-xs text-gray-700 transition hover:bg-gray-100"
+                              >
+                                <Calendar className="h-4 w-4" />
+                              </button>
+                              <div className="pointer-events-none absolute bottom-full left-1/2 z-50 mb-1 hidden -translate-x-1/2 rounded bg-gray-900 px-2 py-1 text-xs text-white group-hover:block">
+                                Reschedule
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Cancel */}
+                          {(wo.status === "Pending" ||
+                            wo.status === "Assigned") && (
+                            <div className="group relative">
+                              <button
+                                type="button"
+                                onClick={() => openAction(wo, "cancel")}
+                                className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-red-600 bg-white text-xs text-red-600 transition hover:bg-red-600 hover:text-white"
+                              >
+                                <XCircle className="h-4 w-4" />
+                              </button>
+                              <div className="pointer-events-none absolute bottom-full left-1/2 z-50 mb-1 hidden -translate-x-1/2 rounded bg-gray-900 px-2 py-1 text-xs text-white group-hover:block">
+                                Cancel
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Right: payment call-to-action – আগের মতোই রেখে দিলাম */}
+                    {wo.status === "Completed" &&
+                      (() => {
+                        const status = wo.paymentRecord?.paymentStatus;
+
+                        if (status === "Proof Uploaded") {
+                          return (
+                            <button
+                              type="button"
+                              onClick={() => openAction(wo, "verifyPayment")}
+                              className="rounded-[10px] border border-gray-300 px-4 py-2.5 text-sm font-medium text-gray-800 hover:bg-gray-50"
+                            >
+                              View Payment
+                            </button>
+                          );
+                        }
+
+                        if (status === "Verified") {
+                          return (
+                            <span className="text-sm text-gray-500">
+                              Paid Verified
+                            </span>
+                          );
+                        }
+
+                        if (status === "Rejected") {
+                          return (
+                            <button
+                              type="button"
+                              onClick={() => openAction(wo, "verifyPayment")}
+                              className="rounded-[10px] border border-gray-300 px-4 py-2.5 text-sm font-medium text-gray-800 hover:bg-gray-50"
+                            >
+                              View Details
+                            </button>
+                          );
+                        }
+
+                        return (
+                          <button
+                            type="button"
+                            className="text-sm font-medium text-[#c20001] hover:underline"
+                            onClick={() => {
+                              Swal.fire({
+                                icon: "success",
+                                title: "Request sent",
+                                text: "Request sent to technician to upload payment proof.",
+                                confirmButtonColor: "#c20001",
+                              });
+                            }}
+                          >
+                            Request Proof
+                          </button>
                         );
-                      }
-                      return (
-                        <Badge className="bg-yellow-100 text-yellow-800">
-                          <DollarSign className="mr-1 h-3 w-3" />
-                          Pending Payment
-                        </Badge>
-                      );
-                    })()}
-
-                    {/* Dispatcher actions (non-completed) */}
-                    {wo.status !== "Completed" && (
-                      <div className="flex gap-1">
-                        {/* 🔁 শুধু Reassign – technician already assigned থাকলে */}
-                        {(wo.status === "Assigned" ||
-                          wo.status === "In Progress") && (
-                          <div className="group relative">
-                            <button
-                              type="button"
-                              onClick={() => openAction(wo, "reassign")}
-                              className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-gray-300 bg-white text-xs text-gray-700 transition hover:bg-gray-100"
-                            >
-                              <RefreshCw className="h-4 w-4" />
-                            </button>
-                            <div className="pointer-events-none absolute bottom-full left-1/2 z-50 mb-1 hidden -translate-x-1/2 rounded bg-gray-900 px-2 py-1 text-xs text-white group-hover:block">
-                              Reassign
-                            </div>
-                          </div>
-                        )}
-
-                        {/* Reschedule */}
-                        {(wo.status === "Pending" ||
-                          wo.status === "Assigned" ||
-                          wo.status === "In Progress") && (
-                          <div className="group relative">
-                            <button
-                              type="button"
-                              onClick={() => openAction(wo, "reschedule")}
-                              className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-gray-300 bg-white text-xs text-gray-700 transition hover:bg-gray-100"
-                            >
-                              <Calendar className="h-4 w-4" />
-                            </button>
-                            <div className="pointer-events-none absolute bottom-full left-1/2 z-50 mb-1 hidden -translate-x-1/2 rounded bg-gray-900 px-2 py-1 text-xs text-white group-hover:block">
-                              Reschedule
-                            </div>
-                          </div>
-                        )}
-
-                        {/* Cancel */}
-                        {(wo.status === "Pending" ||
-                          wo.status === "Assigned") && (
-                          <div className="group relative">
-                            <button
-                              type="button"
-                              onClick={() => openAction(wo, "cancel")}
-                              className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-red-600 bg-white text-xs text-red-600 transition hover:bg-red-600 hover:text-white"
-                            >
-                              <XCircle className="h-4 w-4" />
-                            </button>
-                            <div className="pointer-events-none absolute bottom-full left-1/2 z-50 mb-1 hidden -translate-x-1/2 rounded bg-gray-900 px-2 py-1 text-xs text-white group-hover:block">
-                              Cancel
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    )}
+                      })()}
                   </div>
-
-                  {/* Right: payment call-to-action */}
-                  {wo.status === "Completed" && (() => {
-                    const status = wo.paymentRecord?.paymentStatus;
-
-                    if (status === "Proof Uploaded") {
-                      return (
-                        <button
-                          type="button"
-                          onClick={() => openAction(wo, "verifyPayment")}
-                          className="rounded-[10px] border border-gray-300 px-4 py-2.5 text-sm font-medium text-gray-800 hover:bg-gray-50"
-                        >
-                          View Payment
-                        </button>
-                      );
-                    }
-
-                    if (status === "Verified") {
-                      return (
-                        <span className="text-sm text-gray-500">
-                          Paid Verified
-                        </span>
-                      );
-                    }
-
-                    if (status === "Rejected") {
-                      return (
-                        <button
-                          type="button"
-                          onClick={() => openAction(wo, "verifyPayment")}
-                          className="rounded-[10px] border border-gray-300 px-4 py-2.5 text-sm font-medium text-gray-800 hover:bg-gray-50"
-                        >
-                          View Details
-                        </button>
-                      );
-                    }
-
-                    return (
-                      <button
-                        type="button"
-                        className="text-sm font-medium text-[#c20001] hover:underline"
-                        onClick={() => {
-                          Swal.fire({
-                            icon: "success",
-                            title: "Request sent",
-                            text: "Request sent to technician to upload payment proof.",
-                            confirmButtonColor: "#c20001",
-                          });
-                        }}
-                      >
-                        Request Proof
-                      </button>
-                    );
-                  })()}
                 </div>
-              </div>
-            )}
-          </div>
-        ))}
+              )}
+
+              {/* 🔹 Audit Trail – ADMIN only */}
+              {isAdmin && (
+                <div className="mt-4 border-t border-gray-100 pt-3">
+                  <button
+                    type="button"
+                    onClick={() => toggleAuditTrail(wo.id)}
+                    className="flex w-full items-center justify-between text-sm text-gray-800"
+                  >
+                    <div className="flex items-center gap-2">
+                      <FileText className="h-4 w-4 text-[#c20001]" />
+                      <span className="font-medium">Audit Trail</span>
+                      {audit?.timeline && (
+                        <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-600">
+                          {audit.timeline.length} events
+                        </span>
+                      )}
+                    </div>
+                    {isAuditOpen ? (
+                      <ChevronUp className="h-4 w-4 text-gray-500" />
+                    ) : (
+                      <ChevronDown className="h-4 w-4 text-gray-500" />
+                    )}
+                  </button>
+
+                  {isAuditOpen && (
+                    <div className="mt-3 rounded-lg border border-gray-100 bg-gray-50 px-3 py-3">
+                      {auditLoading[wo.id] && (
+                        <p className="text-xs text-gray-500">
+                          Loading audit trail...
+                        </p>
+                      )}
+
+                      {auditError[wo.id] && (
+                        <p className="text-xs text-red-600">
+                          {auditError[wo.id]}
+                        </p>
+                      )}
+
+                      {!auditLoading[wo.id] &&
+                        !auditError[wo.id] &&
+                        audit?.timeline &&
+                        audit.timeline.length > 0 && (
+                          <ol className="space-y-3">
+                            {audit.timeline.map((evt, index) => {
+                              const label = mapTimelineEventLabel(evt.event);
+                              const pillClass = getTimelinePillClass(
+                                evt.event
+                              );
+                              const timestamp = new Date(
+                                evt.timestamp
+                              ).toLocaleString();
+                              const actorName =
+                                evt.actor?.name || "System";
+
+                              const payment =
+                                evt.paymentId &&
+                                audit.payments?.find(
+                                  (p) => p.id === evt.paymentId
+                                );
+
+                              return (
+                                <li
+                                  key={`${evt.event}-${evt.timestamp}-${index}`}
+                                  className="relative pl-6 text-xs text-gray-700"
+                                >
+                                  {/* timeline dot + line */}
+                                  <span className="absolute left-0 top-1.5 flex h-full flex-col items-center">
+                                    <span className="h-3 w-3 rounded-full border-2 border-white bg-[#c20001] shadow" />
+                                    {index !== audit.timeline.length - 1 && (
+                                      <span className="mt-0.5 h-full w-px bg-gray-300" />
+                                    )}
+                                  </span>
+
+                                  <div className="rounded-md bg-white px-3 py-2 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
+                                    <div className="flex flex-wrap items-center justify-between gap-2">
+                                      <div className="flex flex-wrap items-center gap-2">
+                                        <Badge className={pillClass}>
+                                          {label}
+                                        </Badge>
+                                        <span className="text-[11px] text-gray-500">
+                                          {timestamp}
+                                        </span>
+                                      </div>
+                                      <span className="text-[11px] text-gray-500">
+                                        {actorName}
+                                      </span>
+                                    </div>
+
+                                    {evt.description && (
+                                      <p className="mt-1 text-[11px] text-gray-700">
+                                        {evt.description}
+                                      </p>
+                                    )}
+
+                                    {payment && (
+                                      <div className="mt-2 flex flex-wrap items-center justify-between gap-2 rounded-md bg-gray-50 px-2 py-1.5 text-[11px] text-gray-700">
+                                        <span>
+                                          Amount:{" "}
+                                          <span className="font-semibold text-emerald-700">
+                                            {payment.amount} KES
+                                          </span>{" "}
+                                          • Method: {payment.method}
+                                        </span>
+                                      </div>
+                                    )}
+                                  </div>
+                                </li>
+                              );
+                            })}
+                          </ol>
+                        )}
+
+                      {!auditLoading[wo.id] &&
+                        !auditError[wo.id] &&
+                        (!audit?.timeline || audit.timeline.length === 0) && (
+                          <p className="text-xs text-gray-500">
+                            No audit events recorded yet for this work order.
+                          </p>
+                        )}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        })}
       </div>
     );
   };
