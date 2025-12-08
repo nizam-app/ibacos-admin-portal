@@ -310,7 +310,7 @@ const DispatcherDashboard = () => {
             </p>
             <button
               type="button"
-              onClick={() => navigate("/dispatcher/technician-map")}
+              onClick={() => navigate("/technician-map")}
               className="inline-flex items-center rounded-full border border-[#c20001]/30 bg-[#c20001]/5 px-4 py-1.5 text-xs font-medium text-[#c20001] hover:bg-[#c20001]/10"
             >
               <MapPin className="mr-2 h-4 w-4" />

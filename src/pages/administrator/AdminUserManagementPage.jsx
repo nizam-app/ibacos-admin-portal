@@ -1,5 +1,5 @@
 // src/pages/administrator/AdminUserManagementPage.jsx
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import Swal from "sweetalert2";
 import {
   UserPlus,
@@ -9,6 +9,7 @@ import {
   Edit2,
   Lock,
 } from "lucide-react";
+import AdminUsersAPI from "../../api/adminUsersApi";
 
 // ------------------------------------------------------------------
 // Small Tailwind UI helpers (Card, Button, Badge, Input, Select)
@@ -55,15 +56,21 @@ const Button = ({
   variant = "solid",
   size = "md",
   className = "",
+  disabled = false,
   ...props
 }) => {
   const base =
     "inline-flex items-center justify-center rounded-lg font-medium focus:outline-none focus:ring-2 focus:ring-offset-1 transition-colors";
   const variants = {
-    solid: "bg-[#c20001] text-white hover:bg-[#a00001]",
-    outline:
-      "border border-gray-300 text-gray-700 bg-white hover:bg-gray-50",
-    ghost: "text-gray-700 hover:bg-gray-100",
+    solid: disabled
+      ? "bg-gray-300 text-white cursor-not-allowed"
+      : "bg-[#c20001] text-white hover:bg-[#a00001]",
+    outline: disabled
+      ? "border border-gray-200 text-gray-300 bg-white cursor-not-allowed"
+      : "border border-gray-300 text-gray-700 bg-white hover:bg-gray-50",
+    ghost: disabled
+      ? "text-gray-300 cursor-not-allowed"
+      : "text-gray-700 hover:bg-gray-100",
   };
   const sizes = {
     sm: "h-9 px-3 text-sm",
@@ -71,6 +78,7 @@ const Button = ({
   };
   return (
     <button
+      disabled={disabled}
       className={`${base} ${variants[variant]} ${sizes[size]} ${className}`}
       {...props}
     >
@@ -118,10 +126,7 @@ const Modal = ({ open, title, description, onClose, children }) => {
   if (!open) return null;
   return (
     <div className="fixed inset-0 z-40">
-      <div
-        className="absolute inset-0 bg-black/40"
-        onClick={onClose}
-      />
+      <div className="absolute inset-0 bg-black/40" onClick={onClose} />
       <div className="absolute inset-0 flex items-center justify-center">
         <div className="w-full max-w-lg rounded-xl bg-white shadow-xl border border-gray-200">
           <div className="px-6 pt-5 pb-3 border-b border-gray-100 flex items-start justify-between gap-3">
@@ -130,9 +135,7 @@ const Modal = ({ open, title, description, onClose, children }) => {
                 {title}
               </h3>
               {description && (
-                <p className="text-xs text-gray-500 mt-1">
-                  {description}
-                </p>
+                <p className="text-xs text-gray-500 mt-1">{description}</p>
               )}
             </div>
             <button
@@ -146,10 +149,6 @@ const Modal = ({ open, title, description, onClose, children }) => {
           <div className="px-6 py-4 space-y-4 max-h-[60vh] overflow-y-auto">
             {children}
           </div>
-
-          <div className="px-6 py-3 border-t border-gray-100 flex justify-end gap-2">
-            {/* footer buttons injected via children if needed */}
-          </div>
         </div>
       </div>
     </div>
@@ -157,103 +156,132 @@ const Modal = ({ open, title, description, onClose, children }) => {
 };
 
 // ------------------------------------------------------------------
-// Types (JSDoc style for plain JS)
+// Helper: role mapping (backend <-> UI label)
 // ------------------------------------------------------------------
-/**
- * @typedef {'Call Center Agent' | 'Dispatcher' | 'Administrator'} UserRole
- * @typedef {'Active' | 'Inactive'} UserStatus
- */
+const backendToLabel = (role) => {
+  switch (role) {
+    case "ADMIN":
+      return "Administrator";
+    case "DISPATCHER":
+      return "Dispatcher";
+    case "CALL_CENTER":
+    default:
+      return "Call Center Agent";
+  }
+};
 
-/**
- * @typedef {Object} User
- * @property {string} id
- * @property {string} name
- * @property {string} email
- * @property {string} phone
- * @property {UserRole} role
- * @property {UserStatus} status
- * @property {string} createdDate
- * @property {string=} lastLogin
- */
+const labelToBackend = (label) => {
+  switch (label) {
+    case "Administrator":
+      return "ADMIN";
+    case "Dispatcher":
+      return "DISPATCHER";
+    case "Call Center Agent":
+    default:
+      return "CALL_CENTER";
+  }
+};
+
+const buildUserCode = (id) => `USER${String(id).padStart(3, "0")}`;
+
+const mapBackendUser = (u) => ({
+  id: u.id,
+  code: buildUserCode(u.id),
+  name: u.name,
+  email: u.email || "",
+  phone: u.phone || "",
+  backendRole: u.role, // "CALL_CENTER" | "DISPATCHER" | "ADMIN"
+  role: backendToLabel(u.role),
+  status: u.isBlocked ? "Inactive" : "Active",
+  createdDate: u.createdAt
+    ? new Date(u.createdAt).toISOString().split("T")[0]
+    : "",
+  lastLogin: u.updatedAt ? new Date(u.updatedAt).toLocaleString() : "",
+});
 
 // ------------------------------------------------------------------
 // Page Component
 // ------------------------------------------------------------------
 const AdminUserManagementPage = () => {
-  /** @type {[User[], Function]} */
-  const [users, setUsers] = useState([
-    {
-      id: "USER001",
-      name: "Sarah Williams",
-      email: "sarah.williams@serviopro.com",
-      phone: "+971 50 111 2222",
-      role: "Call Center Agent",
-      status: "Active",
-      createdDate: "2024-01-15",
-      lastLogin: "2024-11-08 09:30 AM",
-    },
-    {
-      id: "USER002",
-      name: "John Mitchell",
-      email: "john.mitchell@serviopro.com",
-      phone: "+971 50 222 3333",
-      role: "Dispatcher",
-      status: "Active",
-      createdDate: "2024-02-20",
-      lastLogin: "2024-11-08 08:15 AM",
-    },
-    {
-      id: "USER003",
-      name: "Admin User",
-      email: "admin@serviopro.com",
-      phone: "+971 50 333 4444",
-      role: "Administrator",
-      status: "Active",
-      createdDate: "2023-12-01",
-      lastLogin: "2024-11-08 10:00 AM",
-    },
-    {
-      id: "USER004",
-      name: "Emma Davis",
-      email: "emma.davis@serviopro.com",
-      phone: "+971 50 444 5555",
-      role: "Call Center Agent",
-      status: "Active",
-      createdDate: "2024-03-10",
-      lastLogin: "2024-11-07 04:30 PM",
-    },
-    {
-      id: "USER005",
-      name: "Michael Brown",
-      email: "michael.brown@serviopro.com",
-      phone: "+971 50 555 6666",
-      role: "Dispatcher",
-      status: "Inactive",
-      createdDate: "2024-04-05",
-      lastLogin: "2024-10-25 02:15 PM",
-    },
-  ]);
+  const [users, setUsers] = useState([]); // mapped users
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
 
   const [searchTerm, setSearchTerm] = useState("");
   const [filterRole, setFilterRole] = useState("all");
   const [isModalOpen, setIsModalOpen] = useState(false);
-  /** @type {[User|null, Function]} */
   const [editingUser, setEditingUser] = useState(null);
+  const [saving, setSaving] = useState(false);
+
   const [formData, setFormData] = useState({
     name: "",
     email: "",
     phone: "",
-    role: /** @type {UserRole} */ ("Call Center Agent"),
+    role: "Call Center Agent",
     password: "",
   });
 
+  // Current logged-in user role (for permissions)
+  let isAdmin = false;
+  try {
+    const stored = localStorage.getItem("user");
+    if (stored) {
+      const parsed = JSON.parse(stored);
+      if (parsed?.role === "ADMIN") {
+        isAdmin = true;
+      }
+    }
+  } catch {
+    // ignore parsing error
+  }
+
+  // --------------------------------------------------
+  // Load users from API
+  // --------------------------------------------------
+  const loadUsers = async () => {
+    try {
+      setLoading(true);
+      setError("");
+
+      const roles = ["CALL_CENTER", "DISPATCHER", "ADMIN"];
+      const responses = await Promise.all(
+        roles.map((r) => AdminUsersAPI.listUsers(r))
+      );
+
+      const merged = responses
+        .map((res) => (Array.isArray(res.data) ? res.data : []))
+        .flat();
+
+      setUsers(merged.map(mapBackendUser));
+    } catch (err) {
+      console.error("Failed to load users", err);
+      setError(
+        err?.response?.data?.message ||
+          "Failed to load users. Please try again."
+      );
+      setUsers([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadUsers();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // --------------------------------------------------
+  // Derived values
+  // --------------------------------------------------
   const filteredUsers = useMemo(() => {
+    const s = searchTerm.toLowerCase();
+
     return users.filter((user) => {
-      const s = searchTerm.toLowerCase();
       const matchesSearch =
         user.name.toLowerCase().includes(s) ||
-        user.email.toLowerCase().includes(s) ||
-        user.id.toLowerCase().includes(s);
+        (user.email || "").toLowerCase().includes(s) ||
+        user.code.toLowerCase().includes(s) ||
+        String(user.id).includes(s);
 
       const matchesRole =
         filterRole === "all" || user.role === filterRole;
@@ -265,9 +293,9 @@ const AdminUserManagementPage = () => {
   const roleStats = useMemo(
     () => ({
       total: users.length,
-      agents: users.filter((u) => u.role === "Call Center Agent").length,
-      dispatchers: users.filter((u) => u.role === "Dispatcher").length,
-      admins: users.filter((u) => u.role === "Administrator").length,
+      agents: users.filter((u) => u.backendRole === "CALL_CENTER").length,
+      dispatchers: users.filter((u) => u.backendRole === "DISPATCHER").length,
+      admins: users.filter((u) => u.backendRole === "ADMIN").length,
     }),
     [users]
   );
@@ -275,8 +303,8 @@ const AdminUserManagementPage = () => {
   // --------------------------------------------------
   // Helpers
   // --------------------------------------------------
-  const getRoleBadge = (role) => {
-    switch (role) {
+  const getRoleBadge = (roleLabel) => {
+    switch (roleLabel) {
       case "Administrator":
         return (
           <Badge className="bg-[#c20001] text-white">
@@ -313,6 +341,16 @@ const AdminUserManagementPage = () => {
   // Actions
   // --------------------------------------------------
   const openAddModal = () => {
+    if (!isAdmin) {
+      Swal.fire({
+        icon: "info",
+        title: "Access restricted",
+        text: "Only Administrators can create new users.",
+        confirmButtonColor: "#c20001",
+      });
+      return;
+    }
+
     setEditingUser(null);
     setFormData({
       name: "",
@@ -325,6 +363,16 @@ const AdminUserManagementPage = () => {
   };
 
   const openEditModal = (user) => {
+    if (!isAdmin) {
+      Swal.fire({
+        icon: "info",
+        title: "Access restricted",
+        text: "Only Administrators can edit users.",
+        confirmButtonColor: "#c20001",
+      });
+      return;
+    }
+
     setEditingUser(user);
     setFormData({
       name: user.name,
@@ -337,11 +385,11 @@ const AdminUserManagementPage = () => {
   };
 
   const handleSaveUser = async () => {
-    if (!formData.name || !formData.email || !formData.phone) {
+    if (!formData.name || !formData.phone) {
       await Swal.fire({
         icon: "error",
         title: "Missing fields",
-        text: "Please fill in name, email and phone.",
+        text: "Please fill in name and phone.",
         confirmButtonColor: "#c20001",
       });
       return;
@@ -357,48 +405,79 @@ const AdminUserManagementPage = () => {
       return;
     }
 
-    if (editingUser) {
-      setUsers((prev) =>
-        prev.map((u) =>
-          u.id === editingUser.id
-            ? { ...u, ...formData }
-            : u
-        )
-      );
-      await Swal.fire({
-        icon: "success",
-        title: "User updated",
-        text: "User information has been updated.",
-        confirmButtonColor: "#c20001",
-      });
-    } else {
-      const newUser = {
-        id: `USER${String(users.length + 1).padStart(3, "0")}`,
-        name: formData.name,
-        email: formData.email,
-        phone: formData.phone,
-        role: formData.role,
-        status: "Active",
-        createdDate: new Date().toISOString().split("T")[0],
-      };
-      setUsers((prev) => [...prev, newUser]);
-      await Swal.fire({
-        icon: "success",
-        title: "User created",
-        text: "New user account has been created.",
-        confirmButtonColor: "#c20001",
-      });
-    }
+    const backendRole = labelToBackend(formData.role);
 
-    setIsModalOpen(false);
+    try {
+      setSaving(true);
+
+      if (editingUser) {
+        // UPDATE user
+        const payload = {
+          name: formData.name,
+          phone: formData.phone,
+          role: backendRole,
+        };
+        if (formData.email) payload.email = formData.email;
+
+        await AdminUsersAPI.updateUser(editingUser.id, payload);
+
+        await Swal.fire({
+          icon: "success",
+          title: "User updated",
+          text: "User information has been updated.",
+          confirmButtonColor: "#c20001",
+        });
+      } else {
+        // CREATE user
+        const payload = {
+          name: formData.name,
+          phone: formData.phone,
+          password: formData.password,
+          role: backendRole,
+        };
+        if (formData.email) payload.email = formData.email;
+
+        await AdminUsersAPI.createUser(payload);
+
+        await Swal.fire({
+          icon: "success",
+          title: "User created",
+          text: "New user account has been created.",
+          confirmButtonColor: "#c20001",
+        });
+      }
+
+      setIsModalOpen(false);
+      await loadUsers();
+    } catch (err) {
+      console.error("Save user failed", err);
+      await Swal.fire({
+        icon: "error",
+        title: "Action failed",
+        text:
+          err?.response?.data?.message ||
+          "Unable to save user. Please try again.",
+        confirmButtonColor: "#c20001",
+      });
+    } finally {
+      setSaving(false);
+    }
   };
 
-  const handleToggleStatus = async (userId) => {
-    const user = users.find((u) => u.id === userId);
-    if (!user) return;
+  const handleToggleStatus = async (user) => {
+    if (!isAdmin) {
+      Swal.fire({
+        icon: "info",
+        title: "Access restricted",
+        text: "Only Administrators can activate or deactivate users.",
+        confirmButtonColor: "#c20001",
+      });
+      return;
+    }
 
     const willDeactivate = user.status === "Active";
 
+    // Ask for confirmation (and reason when deactivating)
     const result = await Swal.fire({
       icon: willDeactivate ? "warning" : "question",
       title: willDeactivate ? "Deactivate user?" : "Activate user?",
@@ -413,32 +492,57 @@ const AdminUserManagementPage = () => {
 
     if (!result.isConfirmed) return;
 
-    setUsers((prev) =>
-      prev.map((u) =>
-        u.id === userId
-          ? {
-              ...u,
-              status: willDeactivate ? "Inactive" : "Active",
-            }
-          : u
-      )
-    );
+    let blockedReason = undefined;
 
-    await Swal.fire({
-      icon: "success",
-      title: willDeactivate ? "User deactivated" : "User activated",
-      text: `${user.name} has been ${
-        willDeactivate ? "deactivated" : "activated"
-      }.`,
-      confirmButtonColor: "#c20001",
-    });
+    if (willDeactivate) {
+      const reasonResult = await Swal.fire({
+        title: "Deactivation reason",
+        input: "text",
+        inputLabel: "Why are you deactivating this user?",
+        inputPlaceholder: "e.g. Left company, misuse, etc.",
+        showCancelButton: true,
+        confirmButtonColor: "#c20001",
+      });
+
+      if (!reasonResult.isConfirmed) return;
+      blockedReason = reasonResult.value || "Deactivated by admin";
+    }
+
+    try {
+      await AdminUsersAPI.blockUser(user.id, {
+        isBlocked: willDeactivate,
+        ...(willDeactivate ? { blockedReason } : {}),
+      });
+
+      await Swal.fire({
+        icon: "success",
+        title: willDeactivate ? "User deactivated" : "User activated",
+        text: `${user.name} has been ${
+          willDeactivate ? "deactivated" : "activated"
+        }.`,
+        confirmButtonColor: "#c20001",
+      });
+
+      await loadUsers();
+    } catch (err) {
+      console.error("Block/unblock failed", err);
+      await Swal.fire({
+        icon: "error",
+        title: "Action failed",
+        text:
+          err?.response?.data?.message ||
+          "Unable to update user status. Please try again.",
+        confirmButtonColor: "#c20001",
+      });
+    }
   };
 
   const handleResetPassword = async (user) => {
     await Swal.fire({
       icon: "info",
-      title: "Password reset link sent",
-      text: `Mock action: reset link sent to ${user.email}. Connect with your auth backend to send real emails.`,
+      title: "Coming soon",
+      text:
+        "Password reset link sending will be implemented later once the backend endpoint is ready.",
       confirmButtonColor: "#c20001",
     });
   };
@@ -464,7 +568,7 @@ const AdminUserManagementPage = () => {
             can create or edit Dispatcher and Admin accounts.
           </p>
         </div>
-        <Button onClick={openAddModal}>
+        <Button onClick={openAddModal} disabled={!isAdmin}>
           <UserPlus className="w-4 h-4 mr-2" />
           Add user
         </Button>
@@ -529,10 +633,7 @@ const AdminUserManagementPage = () => {
               />
             </div>
             <div className="w-full md:w-52">
-              <Select
-                value={filterRole}
-                onChange={setFilterRole}
-              >
+              <Select value={filterRole} onChange={setFilterRole}>
                 <option value="all">All roles</option>
                 <option value="Call Center Agent">Agents</option>
                 <option value="Dispatcher">Dispatchers</option>
@@ -554,90 +655,100 @@ const AdminUserManagementPage = () => {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="space-y-3">
-            {filteredUsers.map((user) => (
-              <div
-                key={user.id}
-                className="p-4 border rounded-lg hover:border-gray-300 transition-colors"
-              >
-                <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
-                  <div className="flex-1">
-                    <div className="flex flex-wrap items-center gap-3 mb-2">
-                      <h3 className="text-sm font-semibold text-[#c20001]">
-                        {user.name}
-                      </h3>
-                      {getRoleBadge(user.role)}
-                      {getStatusBadge(user.status)}
-                    </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 text-xs text-gray-600">
-                      <div>
-                        <p className="text-gray-500">User ID</p>
-                        <p className="mt-1 font-medium text-gray-800">
-                          {user.id}
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-gray-500">Email</p>
-                        <p className="mt-1 font-medium text-gray-800">
-                          {user.email}
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-gray-500">Phone</p>
-                        <p className="mt-1 font-medium text-gray-800">
-                          {user.phone}
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-gray-500">Last login</p>
-                        <p className="mt-1 font-medium text-gray-800">
-                          {user.lastLogin || "Never"}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
+          {loading && (
+            <p className="text-sm text-gray-500 py-4">Loading users…</p>
+          )}
+          {error && !loading && (
+            <p className="text-sm text-red-600 py-4">{error}</p>
+          )}
 
-                  <div className="flex flex-wrap gap-2 min-w-[180px] md:items-end">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => openEditModal(user)}
-                    >
-                      <Edit2 className="w-4 h-4 mr-1" />
-                      Edit
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => handleResetPassword(user)}
-                    >
-                      <Lock className="w-4 h-4 mr-1" />
-                      Reset password
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className={
-                        user.status === "Active"
-                          ? "border-red-600 text-red-600"
-                          : "border-green-600 text-green-600"
-                      }
-                      onClick={() => handleToggleStatus(user.id)}
-                    >
-                      {user.status === "Active"
-                        ? "Deactivate"
-                        : "Activate"}
-                    </Button>
+          {!loading && !error && (
+            <div className="space-y-3">
+              {filteredUsers.map((user) => (
+                <div
+                  key={user.id}
+                  className="p-4 border rounded-lg hover:border-gray-300 transition-colors"
+                >
+                  <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
+                    <div className="flex-1">
+                      <div className="flex flex-wrap items-center gap-3 mb-2">
+                        <h3 className="text-sm font-semibold text-[#c20001]">
+                          {user.name}
+                        </h3>
+                        {getRoleBadge(user.role)}
+                        {getStatusBadge(user.status)}
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 text-xs text-gray-600">
+                        <div>
+                          <p className="text-gray-500">User ID</p>
+                          <p className="mt-1 font-medium text-gray-800">
+                            {user.code}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-gray-500">Email</p>
+                          <p className="mt-1 font-medium text-gray-800">
+                            {user.email || "—"}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-gray-500">Phone</p>
+                          <p className="mt-1 font-medium text-gray-800">
+                            {user.phone}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-gray-500">Last login</p>
+                          <p className="mt-1 font-medium text-gray-800">
+                            {user.lastLogin || "Never"}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-wrap gap-2 min-w-[180px] md:items-end">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => openEditModal(user)}
+                        disabled={!isAdmin}
+                      >
+                        <Edit2 className="w-4 h-4 mr-1" />
+                        Edit
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleResetPassword(user)}
+                        disabled={!isAdmin}
+                      >
+                        <Lock className="w-4 h-4 mr-1" />
+                        Reset password
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className={
+                          user.status === "Active"
+                            ? "border-red-600 text-red-600"
+                            : "border-green-600 text-green-600"
+                        }
+                        onClick={() => handleToggleStatus(user)}
+                        disabled={!isAdmin}
+                      >
+                        {user.status === "Active" ? "Deactivate" : "Activate"}
+                      </Button>
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
-            {filteredUsers.length === 0 && (
-              <p className="text-sm text-center text-gray-500 py-6">
-                No users match the current filters.
-              </p>
-            )}
-          </div>
+              ))}
+              {filteredUsers.length === 0 && (
+                <p className="text-sm text-center text-gray-500 py-6">
+                  No users match the current filters.
+                </p>
+              )}
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -668,7 +779,7 @@ const AdminUserManagementPage = () => {
             />
           </div>
           <div>
-            <Label htmlFor="email">Email address *</Label>
+            <Label htmlFor="email">Email address</Label>
             <Input
               id="email"
               type="email"
@@ -708,9 +819,7 @@ const AdminUserManagementPage = () => {
                 }))
               }
             >
-              <option value="Call Center Agent">
-                Call Center Agent
-              </option>
+              <option value="Call Center Agent">Call Center Agent</option>
               <option value="Dispatcher">Dispatcher</option>
               <option value="Administrator">Administrator</option>
             </Select>
@@ -738,11 +847,16 @@ const AdminUserManagementPage = () => {
             <Button
               variant="outline"
               onClick={() => setIsModalOpen(false)}
+              disabled={saving}
             >
               Cancel
             </Button>
-            <Button onClick={handleSaveUser}>
-              {editingUser ? "Update user" : "Create user"}
+            <Button onClick={handleSaveUser} disabled={saving}>
+              {saving
+                ? "Saving..."
+                : editingUser
+                ? "Update user"
+                : "Create user"}
             </Button>
           </div>
         </div>

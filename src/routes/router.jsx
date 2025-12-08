@@ -71,14 +71,21 @@ const Router = createBrowserRouter([
     ),
     children: [
       { path: "overview", element: <DispatcherDashboard /> },
-      { path: "technician-map", element: <TechnicianMapView /> },
+      
       { path: "service-requests", element: <DispatcherServiceRequests /> },
       { path: "work-orders", element: <DispatcherWorkOrders></DispatcherWorkOrders> },
       { path: "payments", element: <AdminPaymentsPage></AdminPaymentsPage> },
       { path: "technicians", element: <DispatcherTechnicians /> },
     ],
   },
-
+  { 
+    path: "/technician-map", 
+    element: (
+      <ProtectedRoute allowedRoles={["DISPATCHER", "ADMIN"]}>
+        <TechnicianMapView />
+      </ProtectedRoute>
+    ),
+  },
   // 🟣 ADMIN ROUTES – শুধু ADMIN role
   {
     path: "/admin",
