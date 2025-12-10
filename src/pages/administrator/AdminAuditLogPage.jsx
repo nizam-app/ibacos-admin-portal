@@ -390,7 +390,7 @@ const AdminAuditLogPage = () => {
   const [searchTerm, setSearchTerm] = useState("");
 
   // pagination (client-side)
-  const [pageSize] = useState(25);
+  const [pageSize] = useState(10);
   const [currentPage, setCurrentPage] = useState(1);
 
   const [selectedEvent, setSelectedEvent] = useState(null);
