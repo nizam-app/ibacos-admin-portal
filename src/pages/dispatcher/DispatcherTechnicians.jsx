@@ -1,6 +1,6 @@
 // src/pages/dispatcher/DispatcherTechnicians.jsx
 
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useState, useEffect } from "react";
 import {
   Search,
   UserPlus,
@@ -18,106 +18,7 @@ import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts";
 
 import AddEditTechnicianModal from "../../components/technicians/AddEditTechnicianModal";
 import { BlockTechnicianModal } from "../../components/technicians/BlockTechnicianModal";
-
-// ---------------- MOCK DATA ----------------
-
-const INITIAL_TECHNICIANS = [
-  {
-    id: "TECH-001",
-    name: "Ahmed Hassan",
-    specialty: "Electrical",
-    phone: "+971 50 111 1111",
-    email: "ahmed@serviopro.com",
-    status: "Active",
-    activeWorkOrders: 1,
-    completedJobs: 12,
-    employmentType: "Freelancer",
-    commissionRate: 10,
-    joinDate: "2025-01-05",
-    hasCompensationOverride: false,
-    openWorkOrders: [],
-  },
-  {
-    id: "TECH-002",
-    name: "Mohammad Ali",
-    specialty: "Electrical",
-    phone: "+971 50 222 2222",
-    email: "m.ali@serviopro.com",
-    status: "Active",
-    activeWorkOrders: 0,
-    completedJobs: 9,
-    employmentType: "Internal Employee",
-    salary: 5500,
-    bonusRate: 5,
-    joinDate: "2025-02-10",
-    hasCompensationOverride: false,
-    openWorkOrders: [],
-  },
-  {
-    id: "TECH-003",
-    name: "Salim Khan",
-    specialty: "General",
-    phone: "+971 50 333 3333",
-    email: "salim@serviopro.com",
-    status: "Active",
-    activeWorkOrders: 0,
-    completedJobs: 4,
-    employmentType: "Freelancer",
-    commissionRate: 10,
-    joinDate: "2025-03-02",
-    hasCompensationOverride: false,
-    openWorkOrders: [],
-  },
-  {
-    id: "TECH-004",
-    name: "Imran Siddiq",
-    specialty: "HVAC",
-    phone: "+971 50 444 4444",
-    email: "imran@serviopro.com",
-    status: "Active",
-    activeWorkOrders: 1,
-    completedJobs: 7,
-    employmentType: "Internal Employee",
-    salary: 6000,
-    bonusRate: 6,
-    joinDate: "2025-01-18",
-    hasCompensationOverride: false,
-    openWorkOrders: [],
-  },
-  {
-    id: "TECH-005",
-    name: "Nabil Rahman",
-    specialty: "Plumbing",
-    phone: "+971 50 555 5555",
-    email: "nabil@serviopro.com",
-    status: "Active",
-    activeWorkOrders: 0,
-    completedJobs: 5,
-    employmentType: "Freelancer",
-    commissionRate: 10,
-    joinDate: "2025-02-22",
-    hasCompensationOverride: false,
-    openWorkOrders: [],
-  },
-  {
-    id: "TECH-006",
-    name: "Omar Faruk",
-    specialty: "Plumbing",
-    phone: "+971 50 666 6666",
-    email: "omar@serviopro.com",
-    status: "Blocked",
-    blockedReason: "Multiple no-shows on scheduled jobs",
-    blockedDate: "2025-03-15",
-    activeWorkOrders: 0,
-    completedJobs: 3,
-    employmentType: "Internal Employee",
-    salary: 5200,
-    bonusRate: 4,
-    joinDate: "2024-12-10",
-    hasCompensationOverride: false,
-    openWorkOrders: [],
-  },
-];
+import TechnicianAPI from "../../api/techniciansApi";
 
 // KPI colors (Electrical, General, HVAC, Plumbing, others)
 const COLORS = [
@@ -144,16 +45,108 @@ const getUserRoleFromStorage = () => {
   }
 };
 
+// map backend technician → UI technician
+const mapApiTechToUi = (t) => {
+  const status =
+    t.isBlocked === true
+      ? "Blocked"
+      : t.status === "INACTIVE"
+      ? "Inactive"
+      : "Active";
+
+  const employmentType =
+    t.type === "INTERNAL" || t.employmentType === "Employee"
+      ? "Internal Employee"
+      : "Freelancer";
+
+  // commission / bonus can be string "10%" or number 0.1 etc.
+  const normalizePercent = (val) => {
+    if (val === null || val === undefined) return null;
+    const str = String(val);
+    if (str.endsWith("%")) {
+      const num = parseFloat(str.replace("%", ""));
+      return isNaN(num) ? null : num;
+    }
+    const num = parseFloat(str);
+    return isNaN(num) ? null : num * 100; // if backend sends decimal (0.1) convert → 10
+  };
+
+  return {
+    // backend id
+    id: t.id, // numeric DB id (for API calls / React key)
+    techId: t.techId, // "TECH-061" (for display)
+
+    name: t.name,
+    specialty: t.specialization || "General",
+    phone: t.phone,
+    email: t.email,
+    status,
+    employmentType,
+
+    activeWorkOrders: t.activeWorkOrders || 0,
+    completedJobs: t.completedJobs || 0,
+    // backend gives number of open WOs
+    openWorkOrders: t.openWorkOrders ?? 0,
+
+    commissionRate: normalizePercent(t.commissionRate),
+    salary: t.monthlySalary || t.baseSalary || null,
+    bonusRate: normalizePercent(t.bonusRate),
+
+    joinDate: t.joinDate ? t.joinDate.slice(0, 10) : "",
+    blockedReason: t.blockedReason || null,
+    blockedDate: t.blockedAt ? t.blockedAt.slice(0, 10) : null,
+
+    homeAddress: t.homeAddress || "",
+    academicTitle: t.academicTitle || "",
+    hasCompensationOverride: false, // UI only; backend currently doesn't expose
+  };
+};
+
 const DispatcherTechnicians = () => {
-  const [technicians, setTechnicians] = useState(INITIAL_TECHNICIANS);
+  const [technicians, setTechnicians] = useState([]);
+  const [loading, setLoading] = useState(false);
+
   const [searchTerm, setSearchTerm] = useState("");
   const [filterType, setFilterType] = useState("all"); // all | Freelancer | Internal Employee
   const [selectedSpecializations, setSelectedSpecializations] = useState([]);
+
   const [isAddEditModalOpen, setIsAddEditModalOpen] = useState(false);
   const [editingTechnician, setEditingTechnician] = useState(null);
   const [selectedTechnician, setSelectedTechnician] = useState(null);
   const [modalAction, setModalAction] = useState(null); // "block" | "unblock"
   const [userRole] = useState(getUserRoleFromStorage);
+
+  // ---------- load technicians from API ----------
+  const loadTechnicians = async () => {
+    try {
+      setLoading(true);
+
+      // NOTE: now we are keeping filters client-side,
+      // so we call directory with broad params.
+      const res = await TechnicianAPI.getDirectory({
+        search: "",
+        specialization: "All",
+        type: "All",
+        // status: "All"  // optional – backend may treat missing as all
+      });
+
+      const apiTechs = res.data?.technicians || [];
+      setTechnicians(apiTechs.map(mapApiTechToUi));
+    } catch (err) {
+      console.error("Failed to load technicians", err);
+      Swal.fire(
+        "Error",
+        "Failed to load technicians. Please try again.",
+        "error"
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadTechnicians();
+  }, []);
 
   // ---------- helpers ----------
   const allSpecializations = useMemo(() => {
@@ -170,9 +163,18 @@ const DispatcherTechnicians = () => {
       return matchesType && matchesSpec;
     });
 
-  // KPI base list (no search)
+  // KPI base list (no search, but respects current filters)
   const techniciansForKPI = applyTypeAndSpecFilters(technicians);
-  const totalTechnicians = techniciansForKPI.length;
+  const totalTechniciansFiltered = techniciansForKPI.length;
+
+  // ✅ Global counts: always from FULL list, no filters
+  const totalTechniciansAll = technicians.length;
+  const freelancersCount = technicians.filter(
+    (t) => t.employmentType === "Freelancer"
+  ).length;
+  const employeesCount = technicians.filter(
+    (t) => t.employmentType === "Internal Employee"
+  ).length;
 
   // Directory list (search + filters)
   const filteredTechnicians = applyTypeAndSpecFilters(technicians).filter(
@@ -182,17 +184,10 @@ const DispatcherTechnicians = () => {
       return (
         tech.name.toLowerCase().includes(q) ||
         tech.specialty.toLowerCase().includes(q) ||
-        tech.id.toLowerCase().includes(q)
+        (tech.techId || String(tech.id)).toLowerCase().includes(q)
       );
     }
   );
-
-  const freelancers = techniciansForKPI.filter(
-    (t) => t.employmentType === "Freelancer"
-  ).length;
-  const employees = techniciansForKPI.filter(
-    (t) => t.employmentType === "Internal Employee"
-  ).length;
 
   const specCountMap = techniciansForKPI.reduce((acc, t) => {
     acc[t.specialty] = (acc[t.specialty] || 0) + 1;
@@ -209,17 +204,15 @@ const DispatcherTechnicians = () => {
   const specializationCounts = [...orderedSpecs, ...extraSpecs].map((name) => {
     const value = specCountMap[name] || 0;
     const percentage =
-      totalTechnicians > 0
-        ? Math.round((value / totalTechnicians) * 100)
+      totalTechniciansFiltered > 0
+        ? Math.round((value / totalTechniciansFiltered) * 100)
         : 0;
     return { name, value, percentage };
   });
 
   const toggleSpecialization = (spec) => {
     setSelectedSpecializations((prev) =>
-      prev.includes(spec)
-        ? prev.filter((s) => s !== spec)
-        : [...prev, spec]
+      prev.includes(spec) ? prev.filter((s) => s !== spec) : [...prev, spec]
     );
   };
 
@@ -229,54 +222,47 @@ const DispatcherTechnicians = () => {
 
   // ---------- actions ----------
 
-  const handleExportCSV = () => {
-    const headers = [
-      "ID",
-      "Name",
-      "Specialty",
-      "Phone",
-      "Email",
-      "Status",
-      "Employment Type",
-      "Active Work Orders",
-      "Completed Jobs",
-      "Join Date",
-    ];
+  const handleExportCSV = async () => {
+    try {
+      // match current filters roughly
+      const apiType =
+        filterType === "all"
+          ? "All"
+          : filterType === "Freelancer"
+          ? "FREELANCER"
+          : "INTERNAL";
 
-    const rows = technicians.map((t) => [
-      t.id,
-      t.name,
-      t.specialty,
-      t.phone,
-      t.email,
-      t.status,
-      t.employmentType,
-      t.activeWorkOrders,
-      t.completedJobs,
-      t.joinDate,
-    ]);
+      const res = await TechnicianAPI.exportCsv({
+        specialization:
+          selectedSpecializations.length === 1
+            ? selectedSpecializations[0]
+            : "All",
+        type: apiType,
+      });
 
-    const csvContent = [headers.join(","), ...rows.map((r) => r.join(","))].join(
-      "\n"
-    );
+      const blob = new Blob([res.data], {
+        type: "text/csv;charset=utf-8;",
+      });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `technicians_${new Date()
+        .toISOString()
+        .split("T")[0]}.csv`;
+      link.click();
+      URL.revokeObjectURL(url);
 
-    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `technicians_${new Date()
-      .toISOString()
-      .split("T")[0]}.csv`;
-    link.click();
-    URL.revokeObjectURL(url);
-
-    Swal.fire({
-      icon: "success",
-      title: "CSV exported",
-      text: "Technician list has been downloaded.",
-      timer: 1500,
-      showConfirmButton: false,
-    });
+      Swal.fire({
+        icon: "success",
+        title: "CSV exported",
+        text: "Technician list has been downloaded.",
+        timer: 1500,
+        showConfirmButton: false,
+      });
+    } catch (err) {
+      console.error("Export CSV failed", err);
+      Swal.fire("Error", "Failed to export CSV. Please try again.", "error");
+    }
   };
 
   const handleAddNew = () => {
@@ -289,41 +275,90 @@ const DispatcherTechnicians = () => {
     setIsAddEditModalOpen(true);
   };
 
-  const handleSaveTechnician = (data) => {
-    if (editingTechnician) {
-      // update
-      setTechnicians((prev) =>
-        prev.map((t) =>
-          t.id === editingTechnician.id ? { ...t, ...data } : t
-        )
-      );
-      Swal.fire({
-        icon: "success",
-        title: "Technician updated",
-        timer: 1400,
-        showConfirmButton: false,
-      });
+  // build API payload from modal form values
+  const buildPayloadFromForm = (data) => {
+    const payload = {
+      name: data.name,
+      phone: data.phone,
+      email: data.email || null,
+      joinDate: data.joinDate,
+      specialization: data.specialty,
+      type:
+        data.employmentType === "Internal Employee" ? "Internal" : "Freelancer",
+      homeAddress: data.homeAddress || null,
+      academicTitle: data.academicTitle || null,
+    };
+
+    if (data.employmentType === "Freelancer") {
+      const rateSrc =
+        data.commissionRateOverride != null &&
+        data.commissionRateOverride !== ""
+          ? data.commissionRateOverride
+          : data.commissionRate;
+      const rateNumber = rateSrc ? Number(rateSrc) : null;
+      if (rateNumber !== null && !Number.isNaN(rateNumber)) {
+        payload.commissionRate = rateNumber / 100; // convert 10 → 0.10
+      }
     } else {
-      // add
-      const newTech = {
-        id: `TECH-${String(technicians.length + 1).padStart(3, "0")}`,
-        activeWorkOrders: 0,
-        completedJobs: 0,
-        blockedReason: null,
-        blockedDate: null,
-        ...data,
-      };
-      setTechnicians((prev) => [...prev, newTech]);
-      Swal.fire({
-        icon: "success",
-        title: "Technician added",
-        timer: 1400,
-        showConfirmButton: false,
-      });
+      const salarySrc =
+        data.salaryOverride != null && data.salaryOverride !== ""
+          ? data.salaryOverride
+          : data.salary;
+      const bonusSrc =
+        data.bonusRateOverride != null && data.bonusRateOverride !== ""
+          ? data.bonusRateOverride
+          : data.bonusRate;
+
+      const salaryNumber = salarySrc ? Number(salarySrc) : null;
+      const bonusNumber = bonusSrc ? Number(bonusSrc) : null;
+
+      if (salaryNumber !== null && !Number.isNaN(salaryNumber)) {
+        payload.baseSalary = salaryNumber;
+      }
+      if (bonusNumber !== null && !Number.isNaN(bonusNumber)) {
+        payload.bonusRate = bonusNumber / 100; // 5 → 0.05
+      }
     }
 
-    setIsAddEditModalOpen(false);
-    setEditingTechnician(null);
+    return payload;
+  };
+
+  const handleSaveTechnician = async (formValues) => {
+    try {
+      if (editingTechnician) {
+        // Update existing technician
+        const payload = buildPayloadFromForm(formValues);
+        await TechnicianAPI.updateTechnician(editingTechnician.id, payload);
+
+        Swal.fire({
+          icon: "success",
+          title: "Technician updated",
+          timer: 1400,
+          showConfirmButton: false,
+        });
+      } else {
+        // Create new technician
+        const payload = buildPayloadFromForm(formValues);
+        await TechnicianAPI.createTechnician(payload);
+
+        Swal.fire({
+          icon: "success",
+          title: "Technician added",
+          timer: 1400,
+          showConfirmButton: false,
+        });
+      }
+
+      await loadTechnicians();
+      setIsAddEditModalOpen(false);
+      setEditingTechnician(null);
+    } catch (err) {
+      console.error("Save technician failed", err);
+      const msg =
+        err?.response?.data?.message ||
+        "Failed to save technician. Please try again.";
+      Swal.fire("Error", msg, "error");
+    }
   };
 
   const handleBlockClick = (tech) => {
@@ -336,42 +371,39 @@ const DispatcherTechnicians = () => {
     setModalAction("unblock");
   };
 
-  const handleConfirmBlockUnblock = (technicianId, reason) => {
-    if (modalAction === "block") {
-      const today = new Date().toISOString().split("T")[0];
-      setTechnicians((prev) =>
-        prev.map((t) =>
-          t.id === technicianId
-            ? {
-                ...t,
-                status: "Blocked",
-                blockedReason: reason || "",
-                blockedDate: today,
-              }
-            : t
-        )
-      );
-      Swal.fire({
-        icon: "success",
-        title: "Technician blocked",
-        text: "Technician can no longer receive new work orders.",
+  const handleConfirmBlockUnblock = async (technicianId, reason) => {
+    try {
+      const isBlocking = modalAction === "block";
+      await TechnicianAPI.blockTechnician(technicianId, {
+        isBlocked: isBlocking,
+        reason: isBlocking ? reason : null,
       });
-    } else if (modalAction === "unblock") {
-      setTechnicians((prev) =>
-        prev.map((t) =>
-          t.id === technicianId
-            ? { ...t, status: "Active" }
-            : t
-        )
-      );
-      Swal.fire({
-        icon: "success",
-        title: "Technician unblocked",
-      });
-    }
 
-    setSelectedTechnician(null);
-    setModalAction(null);
+      await loadTechnicians();
+
+      if (isBlocking) {
+        Swal.fire({
+          icon: "success",
+          title: "Technician blocked",
+          text: "Technician can no longer receive new work orders.",
+        });
+      } else {
+        Swal.fire({
+          icon: "success",
+          title: "Technician unblocked",
+        });
+      }
+    } catch (err) {
+      console.error("Block/unblock failed", err);
+      Swal.fire(
+        "Error",
+        "Failed to change technician status. Please try again.",
+        "error"
+      );
+    } finally {
+      setSelectedTechnician(null);
+      setModalAction(null);
+    }
   };
 
   // ---------- badge helpers ----------
@@ -402,10 +434,17 @@ const DispatcherTechnicians = () => {
         </span>
       );
     }
+    if (status === "Blocked") {
+      return (
+        <span className="inline-flex items-center rounded-full bg-red-100 text-red-800 px-2 py-0.5 text-xs">
+          <Ban className="w-3 h-3 mr-1" />
+          Blocked
+        </span>
+      );
+    }
     return (
-      <span className="inline-flex items-center rounded-full bg-red-100 text-red-800 px-2 py-0.5 text-xs">
-        <Ban className="w-3 h-3 mr-1" />
-        Blocked
+      <span className="inline-flex items-center rounded-full bg-gray-100 text-gray-700 px-2 py-0.5 text-xs">
+        {status}
       </span>
     );
   };
@@ -497,7 +536,7 @@ const DispatcherTechnicians = () => {
               <div className="lg:col-span-2 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
                 <div className="border-2 border-[#c20001] rounded-2xl px-4 py-6 flex flex-col items-center justify-center bg-white">
                   <p className="text-3xl font-semibold text-[#c20001]">
-                    {totalTechnicians}
+                    {totalTechniciansFiltered}
                   </p>
                   <p className="mt-1 text-sm text-gray-600">Total</p>
                 </div>
@@ -524,7 +563,7 @@ const DispatcherTechnicians = () => {
                   Distribution by Specialization
                 </h3>
 
-                {totalTechnicians > 0 ? (
+                {totalTechniciansFiltered > 0 ? (
                   <ResponsiveContainer width="100%" height={200}>
                     <PieChart>
                       <Pie
@@ -559,7 +598,7 @@ const DispatcherTechnicians = () => {
                   </div>
                 )}
 
-                {totalTechnicians > 0 && (
+                {totalTechniciansFiltered > 0 && (
                   <div className="mt-4 space-y-1 text-xs">
                     {specializationCounts
                       .filter((s) => s.value > 0)
@@ -604,7 +643,7 @@ const DispatcherTechnicians = () => {
                     : "bg-white text-gray-700 border-gray-300 hover:border-gray-400"
                 }`}
               >
-                All ({totalTechnicians})
+                All ({totalTechniciansAll})
               </button>
 
               <button
@@ -617,7 +656,7 @@ const DispatcherTechnicians = () => {
                 }`}
               >
                 <BriefcaseBusiness className="w-3 h-3" />
-                Freelancers ({freelancers})
+                Freelancers ({freelancersCount})
               </button>
 
               <button
@@ -630,7 +669,7 @@ const DispatcherTechnicians = () => {
                 }`}
               >
                 <UsersIcon className="w-3 h-3" />
-                Employees ({employees})
+                Employees ({employeesCount})
               </button>
             </div>
           </div>
@@ -686,7 +725,7 @@ const DispatcherTechnicians = () => {
                     : "bg-white text-gray-700 border-gray-300 hover:border-gray-400"
                 }`}
               >
-                All ({totalTechnicians})
+                All ({totalTechniciansAll})
               </button>
 
               <button
@@ -699,7 +738,7 @@ const DispatcherTechnicians = () => {
                 }`}
               >
                 <BriefcaseBusiness className="w-3 h-3" />
-                Freelancers ({freelancers})
+                Freelancers ({freelancersCount})
               </button>
 
               <button
@@ -712,7 +751,7 @@ const DispatcherTechnicians = () => {
                 }`}
               >
                 <UsersIcon className="w-3 h-3" />
-                Employees ({employees})
+                Employees ({employeesCount})
               </button>
             </div>
           )}
@@ -733,8 +772,11 @@ const DispatcherTechnicians = () => {
             </div>
           </div>
 
-          {/* list */}
-          {filteredTechnicians.length === 0 ? (
+          {loading ? (
+            <div className="text-center py-12 text-gray-500 text-sm">
+              Loading technicians...
+            </div>
+          ) : filteredTechnicians.length === 0 ? (
             <div className="text-center py-12 text-gray-500 text-sm">
               No technicians found matching your search.
             </div>
@@ -762,7 +804,9 @@ const DispatcherTechnicians = () => {
                           </span>
                         )}
                       </div>
-                      <p className="text-xs text-gray-500">{tech.id}</p>
+                      <p className="text-xs text-gray-500">
+                        {tech.techId || tech.id}
+                      </p>
                     </div>
                     <div className="flex flex-col gap-1 items-end">
                       <span className="inline-flex items-center rounded-full border border-[#ffb111] text-[#ffb111] px-2 py-0.5 text-xs">
@@ -779,11 +823,11 @@ const DispatcherTechnicians = () => {
                     </div>
                     <div className="flex items-center justify-between">
                       <span>Email:</span>
-                      <span>{tech.email}</span>
+                      <span>{tech.email || "—"}</span>
                     </div>
 
                     {tech.employmentType === "Freelancer" &&
-                      tech.commissionRate && (
+                      tech.commissionRate != null && (
                         <div className="flex items-center justify-between">
                           <span>Commission Rate:</span>
                           <span className="text-purple-600">
@@ -802,7 +846,7 @@ const DispatcherTechnicians = () => {
                             </span>
                           </div>
                         )}
-                        {tech.bonusRate && (
+                        {tech.bonusRate != null && (
                           <div className="flex items-center justify-between">
                             <span>Bonus Rate:</span>
                             <span className="text-blue-600">
@@ -828,7 +872,9 @@ const DispatcherTechnicians = () => {
                     <div className="flex items-center justify-between">
                       <span>Open Work Orders:</span>
                       <span className="text-gray-900">
-                        {tech.openWorkOrders?.length || 0}
+                        {Array.isArray(tech.openWorkOrders)
+                          ? tech.openWorkOrders.length
+                          : tech.openWorkOrders ?? 0}
                       </span>
                     </div>
                   </div>
@@ -836,7 +882,7 @@ const DispatcherTechnicians = () => {
                   {tech.status === "Blocked" && tech.blockedReason && (
                     <div className="mb-4 p-3 bg-red-100 border border-red-200 rounded">
                       <p className="text-xs text-red-900">
-                        Blocked on {tech.blockedDate}
+                        Blocked on {tech.blockedDate || "—"}
                       </p>
                       <p className="text-sm text-red-800 mt-1">
                         Reason: {tech.blockedReason}

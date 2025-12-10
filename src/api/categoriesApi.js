@@ -5,36 +5,34 @@ const CategoriesAPI = {
   // ----- Categories -----
   getCategories: () => axiosClient.get("/categories"),
 
-  createCategory: (body) =>
-    axiosClient.post("/categories", body), // { name, description }
+  // body: { name, description, image? }
+  createCategory: (body) => axiosClient.post("/categories", body),
 
-  updateCategory: (id, body) =>
-    axiosClient.patch(`/categories/${id}`, body), // { name, description }
+  // body: { name, description, image? }
+  updateCategory: (id, body) => axiosClient.patch(`/categories/${id}`, body),
 
   deleteCategory: (id) => axiosClient.delete(`/categories/${id}`),
 
-  activateCategory: (id) => axiosClient.post(`/categories/${id}/activate`),
-  deactivateCategory: (id) => axiosClient.post(`/categories/${id}/deactivate`),
+  // NOTE: Postman অনুযায়ী method = PATCH
+  activateCategory: (id) => axiosClient.patch(`/categories/${id}/activate`),
+  deactivateCategory: (id) => axiosClient.patch(`/categories/${id}/deactivate`),
 
   // ----- Services -----
-  // NOTE: backend উদাহরণে body তে subserviceId ছিল,
-  // কিন্তু relations দেখে service -> subservices, তাই এখানে
-  // { categoryId, name, description, baseRate } পাঠাচ্ছি।
-  createService: (body) =>
-    axiosClient.post("/categories/services", body),
+  // body: { categoryId, name, description }
+  createService: (body) => axiosClient.post("/categories/services", body),
 
+  // body: { name, description }
   updateService: (id, body) =>
     axiosClient.patch(`/categories/services/${id}`, body),
 
-  deleteService: (id) =>
-    axiosClient.delete(`/categories/services/${id}`),
+  deleteService: (id) => axiosClient.delete(`/categories/services/${id}`),
 
   // ----- Subservices -----
-  // NOTE: list response এ subservice এর serviceId আছে,
-  // তাই createSubservice এ আমরা serviceId পাঠাচ্ছি।
+  // body: { serviceId, name, description, baseRate? }
   createSubservice: (body) =>
     axiosClient.post("/categories/subservices", body),
 
+  // body: { name, description, baseRate? }
   updateSubservice: (id, body) =>
     axiosClient.patch(`/categories/subservices/${id}`, body),
 

@@ -1,5 +1,5 @@
 // src/pages/administrator/AdminAuditLogPage.jsx
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useState, useEffect } from "react";
 import Swal from "sweetalert2";
 import {
   CalendarDays,
@@ -11,6 +11,7 @@ import {
   ShieldAlert,
   UserCircle2,
 } from "lucide-react";
+import AuditLogAPI from "../../api/auditLogApi";
 
 // ------------------------------------------------------
 // Small Tailwind UI helpers (Card, Button, Badge, Input)
@@ -145,173 +146,114 @@ const formatDate = (date, pattern = "yyyy-MM-dd HH:mm:ss") => {
 };
 
 // ------------------------------------------------------
-// Mock audit events
+// Mapping helpers
 // ------------------------------------------------------
-const mockAuditEvents = [
-  {
-    id: "AE-001",
-    timestamp: new Date("2025-11-05T09:12:00"),
-    eventType: "Created",
-    workOrderId: "WO-2025-001",
-    performedBy: {
-      id: "ADMIN001",
-      name: "System Admin",
-      role: "Admin",
-      avatar: "",
-    },
-    details: "Work Order created from web portal.",
-    metadata: {
-      beforeStatus: "-",
-      afterStatus: "Pending",
-      ipAddress: "10.0.0.12",
-      device: "Chrome / macOS",
-    },
-  },
-  {
-    id: "AE-002",
-    timestamp: new Date("2025-11-05T09:20:15"),
-    eventType: "Dispatched",
-    workOrderId: "WO-2025-001",
-    performedBy: {
-      id: "DISP001",
-      name: "Nizam Uddin",
-      role: "Dispatcher",
-      avatar: "",
-    },
-    details: "Assigned to technician Mike Johnson with SLA 2 hours.",
-    metadata: {
-      beforeStatus: "Pending",
-      afterStatus: "Assigned",
-      assignedTechnician: { id: "TECH001", name: "Mike Johnson" },
-      ipAddress: "10.0.0.21",
-      device: "iPad / Safari",
-    },
-  },
-  {
-    id: "AE-003",
-    timestamp: new Date("2025-11-05T11:48:33"),
-    eventType: "Completed",
-    workOrderId: "WO-2025-001",
-    performedBy: {
-      id: "TECH001",
-      name: "Mike Johnson",
-      role: "Technician",
-      avatar: "",
-    },
-    details:
-      "Job marked as completed on-site, photos uploaded from mobile app.",
-    metadata: {
-      beforeStatus: "In Progress",
-      afterStatus: "Completed",
-      ipAddress: "10.0.2.15",
-      device: "Android / App v1.3.0",
-    },
-  },
-  {
-    id: "AE-004",
-    timestamp: new Date("2025-11-05T12:03:11"),
-    eventType: "Paid Verified",
-    workOrderId: "WO-2025-001",
-    performedBy: {
-      id: "ADMIN001",
-      name: "System Admin",
-      role: "Admin",
-      avatar: "",
-    },
-    details:
-      "Payment of 500 SAR verified via Stripe. Technician commission 50 SAR.",
-    metadata: {
-      paymentMethod: "Stripe",
-      paymentAmount: 500,
-      commissionAmount: 50,
-      proofId: "PAY-STR-394923",
-      beforeStatus: "Completed",
-      afterStatus: "Paid",
-    },
-  },
-  {
-    id: "AE-005",
-    timestamp: new Date("2025-11-06T08:14:09"),
-    eventType: "Reassigned",
-    workOrderId: "WO-2025-003",
-    performedBy: {
-      id: "DISP002",
-      name: "Dispatcher Aisha",
-      role: "Dispatcher",
-      avatar: "",
-    },
-    details:
-      "Reassigned from John Smith to Sarah Davis due to schedule conflict.",
-    metadata: {
-      beforeStatus: "Assigned",
-      afterStatus: "Assigned",
-      assignedTechnician: { id: "TECH002", name: "Sarah Davis" },
-    },
-  },
-  {
-    id: "AE-006",
-    timestamp: new Date("2025-11-06T09:50:30"),
-    eventType: "Cancelled",
-    workOrderId: "WO-2025-004",
-    performedBy: {
-      id: "ADMIN001",
-      name: "System Admin",
-      role: "Admin",
-      avatar: "",
-    },
-    details:
-      "Work Order cancelled after fraud check. Customer account temporarily blocked.",
-    metadata: {
-      beforeStatus: "Pending",
-      afterStatus: "Cancelled",
-      ipAddress: "192.168.1.44",
-      device: "Backoffice / Admin",
-    },
-  },
-];
+const parseMetadata = (metadataJson) => {
+  if (!metadataJson) return {};
+  try {
+    return JSON.parse(metadataJson);
+  } catch {
+    return {};
+  }
+};
+
+const buildDetailsFromLog = (log, meta) => {
+  const entityLabel = `${log.entityType} #${log.entityId}`;
+  const action = log.action || "";
+
+  switch (action) {
+    case "PAYMENT_VERIFIED":
+      return `Payment verified for ${entityLabel}${
+        meta.amount ? ` (amount: ${meta.amount})` : ""
+      }.`;
+    case "WO_ASSIGNED":
+      return `Work order #${log.entityId} assigned${
+        meta.technicianId ? ` to technician #${meta.technicianId}` : ""
+      }.`;
+    case "WO_CREATED_FROM_SR":
+      return `Work order #${log.entityId} created from service request.`;
+    case "WO_START":
+      return `Work order #${log.entityId} started.`;
+    case "WO_COMPLETE":
+      return `Work order #${log.entityId} completed.`;
+    case "WO_CANCELLED":
+      return `Work order #${log.entityId} cancelled.`;
+    case "SR_CANCELLED":
+      return `Service request #${log.entityId} cancelled.`;
+    case "TECHNICIAN_BLOCKED":
+      return `Technician blocked (user #${log.entityId}).`;
+    case "TECHNICIAN_UNBLOCKED":
+      return `Technician unblocked (user #${log.entityId}).`;
+    case "TECHNICIAN_CREATED":
+      return `Technician created (user #${log.entityId}).`;
+    case "TECHNICIAN_UPDATED":
+      return `Technician updated (user #${log.entityId}).`;
+    case "USER_LOGIN":
+      return `User logged in (user #${log.entityId}).`;
+    case "USER_LOGOUT":
+      return `User logged out (user #${log.entityId}).`;
+    default:
+      return (action || "").replace(/_/g, " ") + ` (${entityLabel})`;
+  }
+};
+
+const getRoleLabel = (backendRole) => {
+  const r = (backendRole || "").toUpperCase();
+  switch (r) {
+    case "ADMIN":
+      return "Admin";
+    case "DISPATCHER":
+      return "Dispatcher";
+    case "CALL_CENTER":
+      return "Call Center";
+    case "TECH_INTERNAL":
+    case "TECH_FREELANCER":
+      return "Technician";
+    case "CUSTOMER":
+      return "Customer";
+    default:
+      return backendRole || "Unknown";
+  }
+};
 
 // ------------------------------------------------------
 // Helpers for badge colors
 // ------------------------------------------------------
-const getEventBadgeColor = (eventType) => {
-  switch (eventType) {
-    case "Created":
-      return "bg-blue-100 text-blue-800";
-    case "Dispatched":
-      return "bg-purple-100 text-purple-800";
-    case "Reassigned":
-      return "bg-yellow-100 text-yellow-800";
-    case "Paid Verified":
-      return "bg-green-100 text-green-800";
-    case "Completed":
-      return "bg-emerald-100 text-emerald-800";
-    case "Cancelled":
-      return "bg-red-100 text-red-800";
-    default:
-      return "bg-gray-100 text-gray-800";
-  }
+const getEventBadgeColor = (action) => {
+  const a = (action || "").toUpperCase();
+
+  if (a.startsWith("PAYMENT_")) return "bg-green-100 text-green-800";
+  if (a.startsWith("WO_")) return "bg-blue-100 text-blue-800";
+  if (a.includes("CATEGORY")) return "bg-amber-100 text-amber-800";
+  if (a.includes("CUSTOMER")) return "bg-emerald-100 text-emerald-800";
+  if (a.includes("CREATED")) return "bg-emerald-100 text-emerald-800";
+  if (a.includes("UPDATED")) return "bg-indigo-100 text-indigo-800";
+  if (a.includes("DELETED")) return "bg-rose-100 text-rose-800";
+  if (a.includes("BLOCKED") || a.includes("CANCELLED"))
+    return "bg-red-100 text-red-800";
+
+  return "bg-gray-100 text-gray-800";
 };
 
-const getRoleBadgeColor = (role) => {
-  switch (role) {
-    case "Admin":
-      return "bg-[#c20001] text-white";
-    case "Dispatcher":
-      return "bg-blue-100 text-blue-800";
-    case "Technician":
-      return "bg-purple-100 text-purple-800";
-    default:
-      return "bg-gray-100 text-gray-800";
-  }
+const getRoleBadgeColor = (backendRole) => {
+  const r = (backendRole || "").toUpperCase();
+  if (r === "ADMIN") return "bg-[#c20001] text-white";
+  if (r === "DISPATCHER") return "bg-blue-100 text-blue-800";
+  if (r === "CALL_CENTER") return "bg-amber-100 text-amber-800";
+  if (r.startsWith("TECH_")) return "bg-purple-100 text-purple-800";
+  if (r === "CUSTOMER") return "bg-gray-100 text-gray-800";
+  return "bg-gray-100 text-gray-800";
 };
 
 // ------------------------------------------------------
 // Drawer for event details
 // ------------------------------------------------------
 const AuditEventDrawer = ({ event, onClose }) => {
-  const isStatusChange =
-    event.metadata?.beforeStatus || event.metadata?.afterStatus;
-  const isPaymentEvent = event.eventType === "Paid Verified";
+  const meta = event.metadata || {};
+  const isPaymentEvent = (event.action || "").toUpperCase().startsWith(
+    "PAYMENT_"
+  );
+  const entityLabel = event.entityLabel;
 
   return (
     <div className="fixed inset-0 z-40">
@@ -342,11 +284,11 @@ const AuditEventDrawer = ({ event, onClose }) => {
         <div className="px-5 py-4 space-y-4 overflow-y-auto">
           {/* header info */}
           <div className="flex items-center justify-between">
-            <Badge className={getEventBadgeColor(event.eventType)}>
-              {event.eventType}
+            <Badge className={getEventBadgeColor(event.action)}>
+              {event.actionLabel}
             </Badge>
             <Badge className="bg-gray-100 text-gray-800">
-              WO: {event.workOrderId}
+              {entityLabel || "No entity"}
             </Badge>
           </div>
 
@@ -361,14 +303,8 @@ const AuditEventDrawer = ({ event, onClose }) => {
               </p>
               <div className="flex items-center gap-2">
                 <Badge className={getRoleBadgeColor(event.performedBy.role)}>
-                  {event.performedBy.role}
+                  {getRoleLabel(event.performedBy.role)}
                 </Badge>
-                {event.performedBy.role !== "Admin" &&
-                  (isStatusChange || isPaymentEvent) && (
-                    <span className="text-[11px] text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full">
-                      Admin must approve final status
-                    </span>
-                  )}
               </div>
             </div>
           </div>
@@ -381,94 +317,44 @@ const AuditEventDrawer = ({ event, onClose }) => {
             </p>
           </div>
 
-          {/* statuses */}
-          {isStatusChange && (
-            <div className="grid grid-cols-2 gap-3">
-              <div className="bg-gray-50 rounded-lg border border-gray-200 p-3">
-                <p className="text-xs text-gray-500">Before Status</p>
-                <p className="text-sm font-medium text-gray-900 mt-1">
-                  {event.metadata.beforeStatus || "-"}
-                </p>
-              </div>
-              <div className="bg-gray-50 rounded-lg border border-gray-200 p-3">
-                <p className="text-xs text-gray-500">After Status</p>
-                <p className="text-sm font-medium text-gray-900 mt-1">
-                  {event.metadata.afterStatus || "-"}
-                </p>
-              </div>
-            </div>
-          )}
-
-          {/* payment info */}
+          {/* Payment-specific UI */}
           {isPaymentEvent && (
             <div className="space-y-2">
               <p className="text-xs font-semibold text-gray-700">
-                Payment & Payout
+                Payment details
               </p>
               <div className="grid grid-cols-2 gap-3">
                 <div className="bg-green-50 rounded-lg border border-green-100 p-3">
-                  <p className="text-xs text-green-700">Payment Amount</p>
+                  <p className="text-xs text-green-700">Entity</p>
                   <p className="text-sm font-semibold text-green-800 mt-1">
-                    {event.metadata.paymentAmount} SAR
+                    {entityLabel}
                   </p>
-                  <p className="text-[11px] text-green-700/80 mt-1">
-                    Method: {event.metadata.paymentMethod}
-                  </p>
+                  {meta.amount && (
+                    <p className="text-[11px] text-green-700/80 mt-1">
+                      Amount: {meta.amount}
+                    </p>
+                  )}
                 </div>
                 <div className="bg-blue-50 rounded-lg border border-blue-100 p-3">
-                  <p className="text-xs text-blue-700">Commission</p>
+                  <p className="text-xs text-blue-700">Performed by</p>
                   <p className="text-sm font-semibold text-blue-800 mt-1">
-                    {event.metadata.commissionAmount} SAR
+                    {event.performedBy.name}
                   </p>
                   <p className="text-[11px] text-blue-700/80 mt-1">
-                    Proof ID: {event.metadata.proofId}
+                    Role: {getRoleLabel(event.performedBy.role)}
                   </p>
                 </div>
               </div>
             </div>
           )}
 
-          {/* tech info */}
-          {event.metadata.assignedTechnician && (
-            <div className="bg-gray-50 rounded-lg border border-gray-200 p-3">
-              <p className="text-xs text-gray-500">Assigned Technician</p>
-              <p className="text-sm font-medium text-gray-900 mt-1">
-                {event.metadata.assignedTechnician.name}
-              </p>
-              <p className="text-[11px] text-gray-500">
-                ID: {event.metadata.assignedTechnician.id}
-              </p>
-            </div>
-          )}
-
-          {/* device / IP */}
-          {(event.metadata.ipAddress || event.metadata.device) && (
-            <div className="bg-gray-50 rounded-lg border border-gray-200 p-3">
-              <p className="text-xs text-gray-500">Security Context</p>
-              {event.metadata.ipAddress && (
-                <p className="text-xs text-gray-700 mt-1">
-                  IP:{" "}
-                  <span className="font-mono">
-                    {event.metadata.ipAddress}
-                  </span>
-                </p>
-              )}
-              {event.metadata.device && (
-                <p className="text-xs text-gray-700">
-                  Device: {event.metadata.device}
-                </p>
-              )}
-            </div>
-          )}
-
-          {/* note about admin control */}
+          {/* note */}
           <div className="flex items-start gap-2 rounded-lg bg-red-50 border border-red-100 p-3">
             <ShieldAlert className="w-4 h-4 text-red-600 mt-0.5" />
             <p className="text-xs text-red-700">
-              Only <span className="font-semibold">Admin</span> can
-              permanently change Work Order or payment status. Non-admin
-              actions are logged as requests and must be approved in the
-              admin portal.
+              Only <span className="font-semibold">Admin</span> can permanently
+              change payment, payout, or blocking status. All actions are
+              recorded in this audit log.
             </p>
           </div>
         </div>
@@ -487,19 +373,91 @@ const AuditEventDrawer = ({ event, onClose }) => {
 // Main page component
 // ------------------------------------------------------
 const AdminAuditLogPage = () => {
-  const [events] = useState(mockAuditEvents);
-  const [selectedEvent, setSelectedEvent] = useState(null);
+  const [events, setEvents] = useState([]);
+  const [loading, setLoading] = useState(false);
 
   // filters
   const [dateRange, setDateRange] = useState({
     from: startOfMonth(new Date()),
     to: endOfMonth(new Date()),
   });
-  const [eventTypeFilter, setEventTypeFilter] = useState("All");
-  const [roleFilter, setRoleFilter] = useState("All");
-  const [workOrderIdFilter, setWorkOrderIdFilter] = useState("");
+
+  // "All events" | "Payments only" | "Work orders only"
+  const [eventTypeFilter, setEventTypeFilter] = useState("All events");
+
+  const [roleFilter, setRoleFilter] = useState("All roles");
+  const [entityFilter, setEntityFilter] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
 
+  // pagination (client-side)
+  const [pageSize] = useState(25);
+  const [currentPage, setCurrentPage] = useState(1);
+
+  const [selectedEvent, setSelectedEvent] = useState(null);
+
+  // ---------- API helper ----------
+  const loadAuditLogs = async () => {
+    try {
+      setLoading(true);
+
+      const params = {};
+      // only payments → use backend param
+      if (eventTypeFilter === "Payments only") {
+        params.action = "PAYMENT_VERIFIED";
+      }
+
+      const res = await AuditLogAPI.getAuditLogs(params);
+      const data = Array.isArray(res.data) ? res.data : res.data?.logs || [];
+
+      const mapped = data.map((log) => {
+        const meta = parseMetadata(log.metadataJson);
+        const timestamp = new Date(log.createdAt);
+        const entityLabel =
+          log.entityType && log.entityId
+            ? `${log.entityType} #${log.entityId}`
+            : log.entityType || "—";
+
+        const actionLabel = (log.action || "").replace(/_/g, " ");
+
+        return {
+          id: log.id,
+          timestamp,
+          action: log.action,
+          actionLabel,
+          entityType: log.entityType,
+          entityId: log.entityId,
+          entityLabel,
+          metadata: meta,
+          details: buildDetailsFromLog(log, meta),
+          performedBy: {
+            id: log.user?.id ?? log.userId,
+            name: log.user?.name ?? "Unknown user",
+            role: log.user?.role ?? "UNKNOWN",
+          },
+        };
+      });
+
+      setEvents(mapped);
+      setCurrentPage(1);
+    } catch (err) {
+      console.error("Failed to load audit logs", err);
+      Swal.fire(
+        "Error",
+        "Failed to load audit logs. Please try again.",
+        "error"
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // load on mount + when "eventTypeFilter" changes (All / Payments only)
+  useEffect(() => {
+    loadAuditLogs();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [eventTypeFilter]);
+
+  // ---------- Filtering ----------
   const filteredEvents = useMemo(() => {
     return events.filter((event) => {
       // date range
@@ -512,69 +470,102 @@ const AdminAuditLogPage = () => {
         return false;
       }
 
-      if (eventTypeFilter !== "All" && event.eventType !== eventTypeFilter) {
-        return false;
+      // "Work orders only" client-side filter
+      if (eventTypeFilter === "Work orders only") {
+        const t = (event.entityType || "").toUpperCase();
+        if (t !== "WORK_ORDER" && t !== "SERVICE_REQUEST") {
+          return false;
+        }
       }
 
-      if (roleFilter !== "All" && event.performedBy.role !== roleFilter) {
-        return false;
+      // role filter (by backend role)
+      if (roleFilter !== "All roles") {
+        const backendRole = (event.performedBy.role || "").toUpperCase();
+        if (
+          (roleFilter === "Admin" && backendRole !== "ADMIN") ||
+          (roleFilter === "Dispatcher" && backendRole !== "DISPATCHER") ||
+          (roleFilter === "Technician" &&
+            !backendRole.startsWith("TECH_")) ||
+          (roleFilter === "Customer" && backendRole !== "CUSTOMER")
+        ) {
+          return false;
+        }
       }
 
+      // entity text filter (e.g. "WORK_ORDER #35")
       if (
-        workOrderIdFilter &&
-        !event.workOrderId
+        entityFilter &&
+        !(event.entityLabel || "")
           .toLowerCase()
-          .includes(workOrderIdFilter.toLowerCase())
+          .includes(entityFilter.toLowerCase())
       ) {
         return false;
       }
 
+      // text search
       if (searchTerm) {
         const s = searchTerm.toLowerCase();
         const matches =
-          event.details.toLowerCase().includes(s) ||
-          event.performedBy.name.toLowerCase().includes(s) ||
-          event.workOrderId.toLowerCase().includes(s);
+          (event.details || "").toLowerCase().includes(s) ||
+          (event.performedBy.name || "").toLowerCase().includes(s) ||
+          (event.entityLabel || "").toLowerCase().includes(s) ||
+          (event.actionLabel || "").toLowerCase().includes(s);
         if (!matches) return false;
       }
 
       return true;
     });
-  }, [events, dateRange, eventTypeFilter, roleFilter, workOrderIdFilter, searchTerm]);
+  }, [
+    events,
+    dateRange,
+    eventTypeFilter,
+    roleFilter,
+    entityFilter,
+    searchTerm,
+  ]);
+
+  // ---------- Pagination ----------
+  const totalEvents = filteredEvents.length;
+  const pageCount = Math.max(1, Math.ceil(totalEvents / pageSize));
+  const clampedPage = Math.min(currentPage, pageCount);
+  const startIndex = (clampedPage - 1) * pageSize;
+  const endIndex = startIndex + pageSize;
+  const pageEvents = filteredEvents.slice(startIndex, endIndex);
 
   const clearFilters = () => {
     setDateRange({
       from: startOfMonth(new Date()),
       to: endOfMonth(new Date()),
     });
-    setEventTypeFilter("All");
-    setRoleFilter("All");
-    setWorkOrderIdFilter("");
+    setEventTypeFilter("All events");
+    setRoleFilter("All roles");
+    setEntityFilter("");
     setSearchTerm("");
+    setCurrentPage(1);
   };
 
   const hasActiveFilters =
-    eventTypeFilter !== "All" ||
-    roleFilter !== "All" ||
-    workOrderIdFilter !== "" ||
+    eventTypeFilter !== "All events" ||
+    roleFilter !== "All roles" ||
+    entityFilter !== "" ||
     searchTerm !== "";
 
   const handleExportCSV = () => {
     const headers = [
       "Timestamp",
-      "Event",
-      "WorkOrder",
+      "Action",
+      "Entity",
       "PerformedBy",
       "Role",
       "Details",
     ];
     const rows = filteredEvents.map((event) => [
       formatDate(event.timestamp, "yyyy-MM-dd HH:mm:ss"),
-      event.eventType,
-      event.workOrderId,
+      event.action,
+      event.entityLabel,
       event.performedBy.name,
-      event.performedBy.role,
-      event.details.replace(/"/g, '""'),
+      getRoleLabel(event.performedBy.role),
+      (event.details || "").replace(/"/g, '""'),
     ]);
 
     const csv = [
@@ -593,17 +584,16 @@ const AdminAuditLogPage = () => {
     Swal.fire({
       icon: "success",
       title: "Audit CSV exported",
-      text: "Mock file generated. Connect backend storage for real export.",
       confirmButtonColor: "#c20001",
     });
   };
 
-  const handleFilterByWorkOrderClick = (woId) => {
-    setWorkOrderIdFilter(woId);
+  const handleFilterByEntityClick = (entityLabel) => {
+    setEntityFilter(entityLabel);
     Swal.fire({
       icon: "info",
-      title: "Filtered by Work Order",
-      text: `Showing events for ${woId}`,
+      title: "Filtered by entity",
+      text: `Showing events for ${entityLabel}`,
       confirmButtonColor: "#c20001",
     });
   };
@@ -615,12 +605,13 @@ const AdminAuditLogPage = () => {
         <div>
           <h1 className="text-2xl font-semibold text-gray-900">Audit Log</h1>
           <p className="text-sm text-gray-600 mt-1">
-            Track all payments, payouts, blocking and sensitive changes.
+            Track all financial and operational actions (payments, payouts,
+            blocking, category changes, etc.).
           </p>
           <p className="mt-1 inline-flex items-center text-xs text-red-700 bg-red-50 border border-red-100 px-2 py-1 rounded-lg">
             <ShieldAlert className="w-3.5 h-3.5 mr-1" />
             Only <span className="font-semibold mx-1">Admin</span> can
-            permanently change Work Order or payment status.
+            permanently change payment and blocking status.
           </p>
         </div>
         <Button
@@ -692,16 +683,18 @@ const AdminAuditLogPage = () => {
               </div>
             </div>
 
-            {/* event type */}
+            {/* event type buttons */}
             <div className="space-y-2 md:col-span-5">
               <label className="text-sm text-gray-700">Event type</label>
               <div className="flex flex-wrap gap-2">
-                {["All", "Created", "Dispatched", "Paid Verified"].map(
+                {["All events", "Payments only", "Work orders only"].map(
                   (type) => (
                     <Button
                       key={type}
                       size="sm"
-                      variant={eventTypeFilter === type ? "solid" : "outline"}
+                      variant={
+                        eventTypeFilter === type ? "solid" : "outline"
+                      }
                       className={`rounded-full px-4 ${
                         eventTypeFilter === type
                           ? "bg-[#c20001] hover:bg-[#c20001]/90 text-white"
@@ -716,13 +709,16 @@ const AdminAuditLogPage = () => {
               </div>
             </div>
 
-            {/* Work order ID */}
+            {/* Entity filter */}
             <div className="space-y-2 md:col-span-3">
-              <label className="text-sm text-gray-700">Work Order ID</label>
+              <label className="text-sm text-gray-700">Entity (ID / type)</label>
               <Input
-                placeholder="WO-2025-001..."
-                value={workOrderIdFilter}
-                onChange={(e) => setWorkOrderIdFilter(e.target.value)}
+                placeholder="WORK_ORDER #35, USER #1..."
+                value={entityFilter}
+                onChange={(e) => {
+                  setEntityFilter(e.target.value);
+                  setCurrentPage(1);
+                }}
               />
             </div>
           </div>
@@ -733,21 +729,26 @@ const AdminAuditLogPage = () => {
             <div className="space-y-2 md:col-span-5">
               <label className="text-sm text-gray-700">User role</label>
               <div className="flex flex-wrap gap-2">
-                {["All", "Admin", "Dispatcher", "Technician"].map((role) => (
-                  <Button
-                    key={role}
-                    size="sm"
-                    variant={roleFilter === role ? "solid" : "outline"}
-                    className={`rounded-full px-4 ${
-                      roleFilter === role
-                        ? "bg-[#c20001] hover:bg-[#c20001]/90 text-white"
-                        : "border-gray-300 text-gray-700"
-                    }`}
-                    onClick={() => setRoleFilter(role)}
-                  >
-                    {role === "All" ? "All roles" : role}
-                  </Button>
-                ))}
+                {["All roles", "Admin", "Dispatcher", "Technician", "Customer"].map(
+                  (role) => (
+                    <Button
+                      key={role}
+                      size="sm"
+                      variant={roleFilter === role ? "solid" : "outline"}
+                      className={`rounded-full px-4 ${
+                        roleFilter === role
+                          ? "bg-[#c20001] hover:bg-[#c20001]/90 text-white"
+                          : "border-gray-300 text-gray-700"
+                      }`}
+                      onClick={() => {
+                        setRoleFilter(role);
+                        setCurrentPage(1);
+                      }}
+                    >
+                      {role}
+                    </Button>
+                  )
+                )}
               </div>
             </div>
 
@@ -757,9 +758,12 @@ const AdminAuditLogPage = () => {
               <div className="relative">
                 <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
                 <Input
-                  placeholder="Search in details, user, work order..."
+                  placeholder="Search in details, user, entity..."
                   value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
+                  onChange={(e) => {
+                    setSearchTerm(e.target.value);
+                    setCurrentPage(1);
+                  }}
                   className="pl-9"
                 />
               </div>
@@ -771,7 +775,7 @@ const AdminAuditLogPage = () => {
               <div className="h-10 flex items-center rounded-lg border border-dashed border-gray-300 px-3 text-xs text-gray-600 bg-gray-50">
                 Showing{" "}
                 <span className="mx-1 font-semibold text-[#c20001]">
-                  {filteredEvents.length}
+                  {totalEvents}
                 </span>
                 of
                 <span className="mx-1 font-semibold text-[#c20001]">
@@ -793,14 +797,23 @@ const AdminAuditLogPage = () => {
                 <tr>
                   <th className="text-left px-4 py-3">Timestamp</th>
                   <th className="text-left px-4 py-3">Event</th>
-                  <th className="text-left px-4 py-3">Work Order</th>
+                  <th className="text-left px-4 py-3">Entity</th>
                   <th className="text-left px-4 py-3">Performed by</th>
                   <th className="text-left px-4 py-3">Role</th>
                   <th className="text-left px-4 py-3">Details</th>
                 </tr>
               </thead>
               <tbody>
-                {filteredEvents.length === 0 ? (
+                {loading ? (
+                  <tr>
+                    <td
+                      colSpan={6}
+                      className="py-10 text-center text-gray-500"
+                    >
+                      Loading audit events...
+                    </td>
+                  </tr>
+                ) : pageEvents.length === 0 ? (
                   <tr>
                     <td
                       colSpan={6}
@@ -811,7 +824,7 @@ const AdminAuditLogPage = () => {
                     </td>
                   </tr>
                 ) : (
-                  filteredEvents.map((event) => (
+                  pageEvents.map((event) => (
                     <tr
                       key={event.id}
                       className="border-b border-gray-100 hover:bg-gray-50 cursor-pointer"
@@ -828,21 +841,25 @@ const AdminAuditLogPage = () => {
                         </div>
                       </td>
                       <td className="px-4 py-3 align-top">
-                        <Badge className={getEventBadgeColor(event.eventType)}>
-                          {event.eventType}
+                        <Badge className={getEventBadgeColor(event.action)}>
+                          {event.actionLabel}
                         </Badge>
                       </td>
                       <td className="px-4 py-3 align-top">
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleFilterByWorkOrderClick(event.workOrderId);
-                          }}
-                          className="text-[#c20001] hover:underline"
-                        >
-                          {event.workOrderId}
-                        </button>
+                        {event.entityLabel ? (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleFilterByEntityClick(event.entityLabel);
+                            }}
+                            className="text-[#c20001] hover:underline"
+                          >
+                            {event.entityLabel}
+                          </button>
+                        ) : (
+                          "—"
+                        )}
                       </td>
                       <td className="px-4 py-3 align-top">
                         <div className="flex items-center gap-2">
@@ -858,7 +875,7 @@ const AdminAuditLogPage = () => {
                             event.performedBy.role
                           )}
                         >
-                          {event.performedBy.role}
+                          {getRoleLabel(event.performedBy.role)}
                         </Badge>
                       </td>
                       <td className="px-4 py-3 align-top max-w-md">
@@ -871,6 +888,49 @@ const AdminAuditLogPage = () => {
                 )}
               </tbody>
             </table>
+          </div>
+
+          {/* pagination footer */}
+          <div className="flex items-center justify-between px-4 py-3 border-t border-gray-100 text-xs text-gray-600">
+            <span>
+              Showing{" "}
+              <span className="font-semibold">
+                {totalEvents === 0 ? 0 : startIndex + 1}
+              </span>{" "}
+              to{" "}
+              <span className="font-semibold">
+                {totalEvents === 0 ? 0 : Math.min(endIndex, totalEvents)}
+              </span>{" "}
+              of <span className="font-semibold">{totalEvents}</span> audit
+              events
+            </span>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={clampedPage <= 1}
+                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                className="h-8 px-3 text-xs disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                ‹ Prev
+              </Button>
+              <span>
+                Page{" "}
+                <span className="font-semibold">{clampedPage}</span> of{" "}
+                <span className="font-semibold">{pageCount}</span>
+              </span>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={clampedPage >= pageCount}
+                onClick={() =>
+                  setCurrentPage((p) => Math.min(pageCount, p + 1))
+                }
+                className="h-8 px-3 text-xs disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Next ›
+              </Button>
+            </div>
           </div>
         </CardContent>
       </Card>

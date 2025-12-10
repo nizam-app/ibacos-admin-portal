@@ -1,51 +1,45 @@
-// src/api/techniciansApi.js
+// src/api/TechnicianAPI.js
 import axiosClient from "./axiosClient";
 
-// Sob technician related API ekhanei thakbe
-const TechniciansAPI = {
-  // Dispatcher overview cards
-  getStatusOverview: () =>
-    axiosClient.get("/dispatch/technician-status"),
-
-  // List all technicians (freelancers for now)
-  // GET {{baseUrl}}/api/admin/users?role=TECH_FREELANCER
-  listTechnicians: (params = {}) =>
-    axiosClient.get("/admin/users", {
-      params: {
-        role: "TECH_FREELANCER",
-        ...params,
-      },
+const TechnicianAPI = {
+  // Directory list (admin + dispatcher)
+  getDirectory: (params = {}) =>
+    axiosClient.get("/technicians/directory", {
+      params,
     }),
+
+  // Optional: overview (if you want backend stats later)
+  getOverview: (params = {}) =>
+    axiosClient.get("/technicians/overview", {
+      params,
+    }),
+
+  // Single technician details
+  getDetails: (id) => axiosClient.get(`/technicians/${id}`),
 
   // Create new technician
-  // POST {{baseUrl}}/api/admin/users
-  createTechnician: (payload) =>
-    axiosClient.post("/admin/users", payload),
+  createTechnician: (body) => axiosClient.post("/technicians", body),
 
-  // Update basic user info
-  // PATCH {{baseUrl}}/api/admin/users/:id
-  updateTechnician: (userId, payload) =>
-    axiosClient.patch(`/admin/users/${userId}`, payload),
+  // Update technician basic info / compensation
+  updateTechnician: (id, body) =>
+    axiosClient.patch(`/technicians/${id}`, body),
 
-  // Block technician
-  // PATCH {{baseUrl}}/api/admin/users/:id/block
-  blockTechnician: (userId, reason) =>
-    axiosClient.patch(`/admin/users/${userId}/block`, {
-      isBlocked: true,
-      blockedReason: reason,
+  // Block / unblock
+  blockTechnician: (id, body) =>
+    axiosClient.patch(`/technicians/${id}/block`, body),
+
+  // Upload documents (photo, ID, residence permit, degrees)
+  uploadDocuments: (id, formData) =>
+    axiosClient.patch(`/technicians/${id}/documents`, formData, {
+      headers: { "Content-Type": "multipart/form-data" },
     }),
 
-  // Unblock technician
-  // PATCH {{baseUrl}}/api/admin/users/:id/block
-  unblockTechnician: (userId) =>
-    axiosClient.patch(`/admin/users/${userId}/block`, {
-      isBlocked: false,
+  // CSV export (admin)
+  exportCsv: (params = {}) =>
+    axiosClient.get("/technicians/export", {
+      params,
+      responseType: "blob",
     }),
-
-  // Update technician profile (commission, bonus, status, etc.)
-  // PATCH {{baseUrl}}/api/admin/users/:id/profile
-  updateTechnicianProfile: (userId, payload) =>
-    axiosClient.patch(`/admin/users/${userId}/profile`, payload),
 };
 
-export default TechniciansAPI;
+export default TechnicianAPI;
