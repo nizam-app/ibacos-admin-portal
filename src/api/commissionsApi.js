@@ -20,7 +20,7 @@ const CommissionsAPI = {
     Promise.reject(new Error("Payout batches API coming soon")),
   markBatchPaid: () =>
     Promise.reject(new Error("Mark batch paid API coming soon")),
-  confirmBatchTransferred: () =>
+  confirmBatchTransferred: () =>  
     Promise.reject(new Error("Confirm batch transferred API coming soon")),
 };
 

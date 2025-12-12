@@ -1,7 +1,8 @@
 // src/pages/administrator/AdminPayoutManagement.jsx
 import React, { useEffect, useState } from "react";
 import Swal from "sweetalert2";
-import CommissionsAPI from "../../api/commissionsApi";
+// import CommissionsAPI from "../../api/commissionsApi";
+import PayoutsAPI from "../../api/payoutsApi";
 
 // --------------------------------------------------
 // Small Tailwind UI helpers (Card, Button, Badge, etc.)
@@ -341,61 +342,165 @@ const AdminPayoutManagement = () => {
   const [filterType, setFilterType] = useState("All"); // All | Commission | Bonus
 
   // --------- real data states (no mock) ----------
-  const [pendingCommissions] = useState([]); // will be filled when backend API is ready
+  const [pendingCommissions, setPendingCommissions] = useState([]);
   const [earlyPayoutRequests, setEarlyPayoutRequests] = useState([]);
-  const [payoutBatches] = useState([]); // coming from backend later
-  const [payoutHistory] = useState([]); // coming from backend later
+  const [payoutBatches, setPayoutBatches] = useState([]);
+  const [payoutHistory, setPayoutHistory] = useState([]);
+
+  const [summary, setSummary] = useState(null); // /payouts/summary data
 
   const [payoutRequestsLoading, setPayoutRequestsLoading] = useState(false);
   const [payoutRequestsError, setPayoutRequestsError] = useState("");
 
   // ----------------- load payout requests ----------------
   useEffect(() => {
-    const loadPayoutRequests = async () => {
+    const loadEarlyRequests = async () => {
       try {
         setPayoutRequestsLoading(true);
         setPayoutRequestsError("");
 
-        const { data } = await CommissionsAPI.getPayoutRequests();
+        const { data } = await PayoutsAPI.getEarlyRequests();
 
-        // Map backend shape -> UI shape
         const mapped =
           (data || []).map((item) => ({
             id: item.id,
             technicianId: item.technicianId,
             technicianName:
-              item.technician?.name ||
+              item.technician ||
               (item.technicianId ? `Technician #${item.technicianId}` : "—"),
-            phone: item.technician?.phone || "",
-            requestDate: item.createdAt
-              ? new Date(item.createdAt).toLocaleDateString("en-US")
+            phone: "", // backend এখন phone দেয় না, চাইলে পরে যোগ করতে পারো
+            requestDate: item.requestedAt
+              ? new Date(item.requestedAt).toLocaleDateString("en-US")
               : "",
             requestedAmount: item.amount ?? 0,
-            // Backend e commissionIds nai, tai empty array rakhlam
+            // এই API commission IDs পাঠাচ্ছে না, তাই empty রাখলাম
             commissionIds: [],
             reason: item.reason || "",
-            status: item.status || "PENDING", // PENDING / APPROVED / REJECTED
-            reviewedBy: item.reviewedBy?.name || null,
-            reviewedDate: item.reviewedAt
-              ? new Date(item.reviewedAt).toLocaleDateString("en-US")
-              : null,
+            // এই endpoint সাধারণত শুধু pending list দেয়
+            status: "PENDING",
+            reviewedBy: null,
+            reviewedDate: null,
             rejectionReason: null,
           })) || [];
 
         setEarlyPayoutRequests(mapped);
       } catch (err) {
-        console.error("Failed to load payout requests", err);
+        console.error("Failed to load early payout requests", err);
         setPayoutRequestsError(
           err?.response?.data?.message ||
-            "Failed to load payout requests from server."
+          "Failed to load early payout requests from server."
         );
       } finally {
         setPayoutRequestsLoading(false);
       }
     };
 
-    loadPayoutRequests();
+    loadEarlyRequests();
   }, []);
+  // Summary + pending + batches + history
+  useEffect(() => {
+    const loadPayoutDashboard = async () => {
+      try {
+        const [summaryRes, pendingRes, batchesRes, historyRes] =
+          await Promise.all([
+            PayoutsAPI.getSummary(),
+            PayoutsAPI.getPendingCommissions(),
+            PayoutsAPI.getBatches(),
+            PayoutsAPI.getHistory(),
+          ]);
+
+        // 1) summary
+        setSummary(summaryRes.data || null);
+
+        // 2) pending commissions table mapping
+        const pendingMapped = (pendingRes.data || []).map((item) => ({
+          id: item.id,
+          workOrderId:
+            item.workOrderId ||
+            item.workOrderNumber ||
+            `WO-${item.id}`,
+          technicianName:
+            item.technician ||
+            item.technicianName ||
+            (item.technicianId ? `Technician #${item.technicianId}` : "—"),
+          employmentType: item.employmentType || item.type || "",
+          type:
+            item.type === "BONUS" || item.componentType === "BONUS"
+              ? "Bonus"
+              : "Commission",
+          serviceCategory: item.serviceCategory || item.serviceName || "—",
+          paymentAmount: item.paymentAmount ?? item.grossAmount ?? 0,
+          rate: item.rate ?? item.commissionRate ?? 0,
+          amount: item.amount ?? item.netAmount ?? 0,
+          paymentDate: item.paymentDate
+            ? new Date(item.paymentDate).toLocaleDateString("en-US")
+            : "",
+        }));
+        setPendingCommissions(pendingMapped);
+
+        // 3) payout batches mapping
+        const batchesMapped = (batchesRes.data || []).map((item) => ({
+          id: item.id,
+          batchNumber: `Batch #${item.id}`,
+          createdDate: item.createdAt
+            ? new Date(item.createdAt).toLocaleDateString("en-US")
+            : "",
+          payoutDate: item.scheduledFor
+            ? new Date(item.scheduledFor).toLocaleDateString("en-US")
+            : item.processedAt
+              ? new Date(item.processedAt).toLocaleDateString("en-US")
+              : "",
+          totalAmount: item.totalAmount ?? 0,
+          technicianCount: 1, // এই API প্রতি rowতে এক technician
+          commissionsCount: item.commissionsCount ?? 0,
+          status:
+            item.status === "PAID" || item.status === "COMPLETED"
+              ? "Paid"
+              : item.status === "SCHEDULED"
+                ? "Pending"
+                : "Processed",
+          confirmedBy: item.createdBy || null,
+          confirmedDate: item.scheduledFor
+            ? new Date(item.scheduledFor).toLocaleDateString("en-US")
+            : "",
+          paidBy: null,
+          paidDate: item.processedAt
+            ? new Date(item.processedAt).toLocaleDateString("en-US")
+            : "",
+          payouts: [], // breakdown backend থেকে এখন আসছে না
+        }));
+        setPayoutBatches(batchesMapped);
+
+        // 4) payout history mapping
+        const historyMapped = (historyRes.data || []).map((item) => ({
+          id: item.id,
+          payoutId: item.id,
+          workOrderId: "—", // backend এখন দেয় না
+          technicianName:
+            item.technician ||
+            (item.technicianId ? `Technician #${item.technicianId}` : "—"),
+          type: "Commission", // placeholder, চাইলে backend এ type যোগ করবে
+          amount: item.totalAmount ?? 0,
+          paymentDate: item.createdAt
+            ? new Date(item.createdAt).toLocaleDateString("en-US")
+            : "",
+          payoutDate: item.processedAt
+            ? new Date(item.processedAt).toLocaleDateString("en-US")
+            : "",
+          batchNumber: "—",
+          status: "Paid",
+        }));
+        setPayoutHistory(historyMapped);
+      } catch (err) {
+        console.error("Failed to load payout dashboard data", err);
+        // চাইলে এখানে আলাদা error state রাখতে পারো
+      }
+    };
+
+    loadPayoutDashboard();
+  }, []);
+
+
 
   // ----------------- helpers & stats ----------------
   const totalPendingAmount = pendingCommissions.reduce(
@@ -417,7 +522,33 @@ const AdminPayoutManagement = () => {
   );
   const totalPaidThisMonthCount = payoutHistory.length;
 
-  const getNextMonday = () => {
+  const summaryPendingAmount =
+    summary?.pendingCommissions?.amount ?? totalPendingAmount;
+  const summaryPendingCount =
+    summary?.pendingCommissions?.count ?? pendingCommissions.length;
+
+  const summaryEarlyRequestsCount =
+    summary?.earlyPayoutRequests?.count ?? totalPendingRequests;
+  const summaryEarlyRequestsAmount =
+    summary?.earlyPayoutRequests?.amount ?? totalEarlyPayoutAmount;
+
+  const summaryPaidAmount =
+    summary?.totalPaidThisMonth?.amount ?? totalPaidThisMonthAmount;
+  const summaryPaidCount =
+    summary?.totalPaidThisMonth?.count ?? totalPaidThisMonthCount;
+
+  const summaryNextPayoutDateText = summary?.nextPayoutDate
+    ? new Date(summary.nextPayoutDate).toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    })
+    : getNextMonday();
+
+  const summaryNextPayoutLabel = summary?.nextPayoutDay || "Weekly Monday";
+
+
+  function getNextMonday() {
     const today = new Date();
     const daysUntilMonday = ((8 - today.getDay()) % 7) || 7;
     const nextMonday = new Date(today);
@@ -427,7 +558,8 @@ const AdminPayoutManagement = () => {
       day: "numeric",
       year: "numeric",
     });
-  };
+  }
+
 
   const filteredPendingCommissions = pendingCommissions.filter((comm) => {
     const q = searchTerm.toLowerCase();
@@ -449,30 +581,78 @@ const AdminPayoutManagement = () => {
   };
 
   // ----------------- actions ----------------
-  // 👉 Batch APIs are not ready yet → only show "Coming soon"
-  const handleCreateBatch = () => {
-    Swal.fire(
-      "Coming soon",
-      "Payout batch creation will be enabled once the backend API is implemented.",
-      "info"
-    );
+  const handleCreateBatch = async () => {
+    try {
+      const confirm = await Swal.fire({
+        title: "Create weekly payout batch?",
+        text: "This will include all pending commissions in a new payout batch.",
+        icon: "question",
+        showCancelButton: true,
+        confirmButtonText: "Yes, create batch",
+      });
+
+      if (!confirm.isConfirmed) return;
+
+      const { data } = await PayoutsAPI.createBatch();
+
+      Swal.fire(
+        "Batch created",
+        data?.message || "Weekly payout batch created successfully.",
+        "success"
+      );
+
+      setIsCreateBatchOpen(false);
+
+      // batch তৈরি হলে আবার dashboard reload করে নাও
+      // তুমি উপরের loadPayoutDashboard ফাংশনটাকে বাইরে এনে এখানে call করতে পারো।
+      // await loadPayoutDashboard();
+    } catch (err) {
+      console.error("Create payout batch failed", err);
+      Swal.fire(
+        "Error",
+        err?.response?.data?.message ||
+        "Failed to create payout batch. Please try again.",
+        "error"
+      );
+    }
   };
 
-  const handleConfirmBatch = () => {
-    Swal.fire(
-      "Coming soon",
-      "Confirming payout batches will be available once the backend API is ready.",
-      "info"
-    );
+
+  const handleConfirmBatch = async (batchId) => {
+    try {
+      const confirm = await Swal.fire({
+        title: "Process payout batch?",
+        text: "This will process the payout for this batch.",
+        icon: "question",
+        showCancelButton: true,
+        confirmButtonText: "Yes, process",
+      });
+
+      if (!confirm.isConfirmed) return;
+
+      const { data } = await PayoutsAPI.processBatch(batchId);
+
+      Swal.fire(
+        "Batch processed",
+        data?.message || "Payout batch processed successfully.",
+        "success"
+      );
+
+      // আবার batches + history reload করে নাও
+      // await loadPayoutDashboard();
+    } catch (err) {
+      console.error("Process payout batch failed", err);
+      Swal.fire(
+        "Error",
+        err?.response?.data?.message ||
+        "Failed to process payout batch. Please try again.",
+        "error"
+      );
+    }
   };
 
-  const handleMarkPaid = () => {
-    Swal.fire(
-      "Coming soon",
-      "Marking batches as paid will be available once the backend API is ready.",
-      "info"
-    );
-  };
+  const handleMarkPaid = handleConfirmBatch;
+
 
   const openReviewRequest = (request) => {
     setSelectedRequest(request);
@@ -494,22 +674,22 @@ const AdminPayoutManagement = () => {
 
       if (!confirm.isConfirmed) return;
 
-      const { data: updated } = await CommissionsAPI.reviewPayoutRequest(
+      // নতুন API call
+      await PayoutsAPI.approveEarlyRequest(
         selectedRequest.id,
-        "APPROVE"
+        "Approved for early payout"
       );
 
+      // Local state update
       setEarlyPayoutRequests((prev) =>
         prev.map((r) =>
-          r.id === updated.id
+          r.id === selectedRequest.id
             ? {
-                ...r,
-                status: updated.status || "APPROVED",
-                reviewedBy: "Admin User",
-                reviewedDate: updated.reviewedAt
-                  ? new Date(updated.reviewedAt).toLocaleDateString("en-US")
-                  : new Date().toLocaleDateString("en-US"),
-              }
+              ...r,
+              status: "APPROVED",
+              reviewedBy: "Admin User",
+              reviewedDate: new Date().toLocaleDateString("en-US"),
+            }
             : r
         )
       );
@@ -527,11 +707,12 @@ const AdminPayoutManagement = () => {
       Swal.fire(
         "Error",
         err?.response?.data?.message ||
-          "Failed to approve payout request. Please try again.",
+        "Failed to approve payout request. Please try again.",
         "error"
       );
     }
   };
+
 
   const handleRejectRequest = async () => {
     if (!selectedRequest) return;
@@ -553,24 +734,20 @@ const AdminPayoutManagement = () => {
 
       const reasonText = rejectionReason.trim();
 
-      const { data: updated } = await CommissionsAPI.reviewPayoutRequest(
-        selectedRequest.id,
-        "REJECT",
-        reasonText
-      );
+      // নতুন API call
+      await PayoutsAPI.rejectEarlyRequest(selectedRequest.id, reasonText);
 
+      // Local state update
       setEarlyPayoutRequests((prev) =>
         prev.map((r) =>
-          r.id === updated.id
+          r.id === selectedRequest.id
             ? {
-                ...r,
-                status: updated.status || "REJECTED",
-                reviewedBy: "Admin User",
-                reviewedDate: updated.reviewedAt
-                  ? new Date(updated.reviewedAt).toLocaleDateString("en-US")
-                  : new Date().toLocaleDateString("en-US"),
-                rejectionReason: reasonText,
-              }
+              ...r,
+              status: "REJECTED",
+              reviewedBy: "Admin User",
+              reviewedDate: new Date().toLocaleDateString("en-US"),
+              rejectionReason: reasonText,
+            }
             : r
         )
       );
@@ -582,11 +759,12 @@ const AdminPayoutManagement = () => {
       Swal.fire(
         "Error",
         err?.response?.data?.message ||
-          "Failed to reject payout request. Please try again.",
+        "Failed to reject payout request. Please try again.",
         "error"
       );
     }
   };
+
 
   const openBatchDetails = (batch) => {
     setSelectedBatch(batch);
@@ -615,10 +793,10 @@ const AdminPayoutManagement = () => {
               <div>
                 <p className="text-sm text-gray-600">Pending Commissions</p>
                 <p className="text-2xl font-semibold text-[#c20001] mt-1">
-                  ${totalPendingAmount.toFixed(2)}
+                  ${summaryPendingAmount.toFixed(2)}
                 </p>
                 <p className="text-xs text-gray-500 mt-1">
-                  {pendingCommissions.length} items
+                  {summaryPendingCount} items
                 </p>
               </div>
               <div className="h-12 w-12 rounded-full bg-red-50 flex items-center justify-center">
@@ -634,10 +812,10 @@ const AdminPayoutManagement = () => {
               <div>
                 <p className="text-sm text-gray-600">Early Payout Requests</p>
                 <p className="text-2xl font-semibold text-[#ffb111] mt-1">
-                  {totalPendingRequests}
+                  {summaryEarlyRequestsCount}
                 </p>
                 <p className="text-xs text-gray-500 mt-1">
-                  ${totalEarlyPayoutAmount.toFixed(2)}
+                  ${summaryEarlyRequestsAmount.toFixed(2)}
                 </p>
               </div>
               <div className="h-12 w-12 rounded-full bg-yellow-50 flex items-center justify-center">
@@ -653,9 +831,12 @@ const AdminPayoutManagement = () => {
               <div>
                 <p className="text-sm text-gray-600">Next Payout Date</p>
                 <p className="text-xl font-semibold text-gray-900 mt-1">
-                  {getNextMonday()}
+                  {summaryNextPayoutDateText}
                 </p>
-                <p className="text-xs text-gray-500 mt-1">Weekly Monday</p>
+                <p className="text-xs text-gray-500 mt-1">
+                  {summaryNextPayoutLabel}
+                </p>
+
               </div>
               <div className="h-12 w-12 rounded-full bg-blue-50 flex items-center justify-center">
                 <CalendarIcon className="h-6 w-6 text-blue-600" />
@@ -672,11 +853,12 @@ const AdminPayoutManagement = () => {
                   Total Paid (This Month)
                 </p>
                 <p className="text-2xl font-semibold text-green-600 mt-1">
-                  ${totalPaidThisMonthAmount.toFixed(2)}
+                  ${summaryPaidAmount.toFixed(2)}
                 </p>
                 <p className="text-xs text-gray-500 mt-1">
-                  {totalPaidThisMonthCount} payouts
+                  {summaryPaidCount} payouts
                 </p>
+
               </div>
               <div className="h-12 w-12 rounded-full bg-green-50 flex items-center justify-center">
                 <TrendingUp className="h-6 w-6 text-green-600" />
@@ -697,11 +879,10 @@ const AdminPayoutManagement = () => {
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
-            className={`relative px-4 py-2 rounded-lg flex items-center gap-2 ${
-              activeTab === tab.id
-                ? "bg-white shadow text-gray-900"
-                : "text-gray-600 hover:text-gray-900"
-            }`}
+            className={`relative px-4 py-2 rounded-lg flex items-center gap-2 ${activeTab === tab.id
+              ? "bg-white shadow text-gray-900"
+              : "text-gray-600 hover:text-gray-900"
+              }`}
           >
             {tab.label}
             {tab.id === "pending" && pendingCommissions.length > 0 && (
@@ -916,8 +1097,8 @@ const AdminPayoutManagement = () => {
                               r.status === "PENDING"
                                 ? "bg-yellow-100 text-yellow-800"
                                 : r.status === "APPROVED"
-                                ? "bg-green-100 text-green-800"
-                                : "bg-red-100 text-red-800"
+                                  ? "bg-green-100 text-green-800"
+                                  : "bg-red-100 text-red-800"
                             }
                           >
                             {statusLabel(r.status)}
@@ -1035,8 +1216,8 @@ const AdminPayoutManagement = () => {
                           b.status === "Pending"
                             ? "bg-yellow-100 text-yellow-800"
                             : b.status === "Confirmed"
-                            ? "bg-blue-100 text-blue-800"
-                            : "bg-green-100 text-green-800"
+                              ? "bg-blue-100 text-blue-800"
+                              : "bg-green-100 text-green-800"
                         }
                       >
                         {b.status}

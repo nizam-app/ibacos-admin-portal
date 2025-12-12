@@ -317,7 +317,7 @@ export default function DispatcherWorkOrders() {
       console.error("Failed to load work orders", err);
       setError(
         err.response?.data?.message ||
-          "Failed to load work orders. Please try again."
+        "Failed to load work orders. Please try again."
       );
       setWorkOrders([]);
     } finally {
@@ -359,7 +359,7 @@ export default function DispatcherWorkOrders() {
       console.error("Failed to load nearby technicians", err);
       setTechError(
         err.response?.data?.message ||
-          "Failed to load nearby technicians. Please try again."
+        "Failed to load nearby technicians. Please try again."
       );
       setTechnicians([]);
     } finally {
@@ -380,8 +380,8 @@ export default function DispatcherWorkOrders() {
 
       const timeline = Array.isArray(payload.timeline)
         ? [...payload.timeline].sort(
-            (a, b) => new Date(b.timestamp) - new Date(a.timestamp)
-          )
+          (a, b) => new Date(b.timestamp) - new Date(a.timestamp)
+        )
         : [];
 
       const payments = Array.isArray(payload.payments)
@@ -441,10 +441,23 @@ export default function DispatcherWorkOrders() {
     }, {});
   }, [technicians]);
 
-  const getTechnicianName = (id) => {
+  const getTechnicianName = (id, workOrder) => {
     if (!id) return "";
-    return technicianNameMap[id] || `Tech #${id}`;
+
+    // 1) প্রথমে work order এর ভিতরের technician object থেকে নাম নাও
+    if (workOrder?.raw?.technician?.name) {
+      return workOrder.raw.technician.name;
+    }
+
+    // 2) না থাকলে nearby technicians map থেকে চেষ্টা করো
+    if (technicianNameMap[id]) {
+      return technicianNameMap[id];
+    }
+
+    // 3) সবশেষে fallback
+    return `Tech #${id}`;
   };
+
 
   const getPriorityColor = (priority) => {
     switch (priority) {
@@ -692,7 +705,7 @@ export default function DispatcherWorkOrders() {
                 {wo.assignedTechnician ? (
                   <div className="flex items-center gap-1">
                     <User className="h-4 w-4" />
-                    <span>{getTechnicianName(wo.assignedTechnician)}</span>
+                    <span>{getTechnicianName(wo.assignedTechnician, wo)}</span>
                   </div>
                 ) : (
                   <div className="flex items-center gap-1 text-orange-600">
@@ -762,56 +775,56 @@ export default function DispatcherWorkOrders() {
                           {(wo.status === "Pending" ||
                             wo.status === "Assigned" ||
                             wo.status === "In Progress") && (
-                            <div className="group relative">
-                              <button
-                                type="button"
-                                onClick={() => openAction(wo, "reassign")}
-                                className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-gray-300 bg-white text-xs text-gray-700 transition hover:bg-gray-100"
-                              >
-                                <RefreshCw className="h-4 w-4" />
-                              </button>
-                              <div className="pointer-events-none absolute bottom-full left-1/2 z-50 mb-1 hidden -translate-x-1/2 rounded bg-gray-900 px-2 py-1 text-xs text-white group-hover:block">
-                                {wo.status === "Pending"
-                                  ? "Assign"
-                                  : "Reassign"}
+                              <div className="group relative">
+                                <button
+                                  type="button"
+                                  onClick={() => openAction(wo, "reassign")}
+                                  className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-gray-300 bg-white text-xs text-gray-700 transition hover:bg-gray-100"
+                                >
+                                  <RefreshCw className="h-4 w-4" />
+                                </button>
+                                <div className="pointer-events-none absolute bottom-full left-1/2 z-50 mb-1 hidden -translate-x-1/2 rounded bg-gray-900 px-2 py-1 text-xs text-white group-hover:block">
+                                  {wo.status === "Pending"
+                                    ? "Assign"
+                                    : "Reassign"}
+                                </div>
                               </div>
-                            </div>
-                          )}
+                            )}
 
                           {/* Reschedule */}
                           {(wo.status === "Pending" ||
                             wo.status === "Assigned" ||
                             wo.status === "In Progress") && (
-                            <div className="group relative">
-                              <button
-                                type="button"
-                                onClick={() => openAction(wo, "reschedule")}
-                                className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-gray-300 bg-white text-xs text-gray-700 transition hover:bg-gray-100"
-                              >
-                                <Calendar className="h-4 w-4" />
-                              </button>
-                              <div className="pointer-events-none absolute bottom-full left-1/2 z-50 mb-1 hidden -translate-x-1/2 rounded bg-gray-900 px-2 py-1 text-xs text-white group-hover:block">
-                                Reschedule
+                              <div className="group relative">
+                                <button
+                                  type="button"
+                                  onClick={() => openAction(wo, "reschedule")}
+                                  className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-gray-300 bg-white text-xs text-gray-700 transition hover:bg-gray-100"
+                                >
+                                  <Calendar className="h-4 w-4" />
+                                </button>
+                                <div className="pointer-events-none absolute bottom-full left-1/2 z-50 mb-1 hidden -translate-x-1/2 rounded bg-gray-900 px-2 py-1 text-xs text-white group-hover:block">
+                                  Reschedule
+                                </div>
                               </div>
-                            </div>
-                          )}
+                            )}
 
                           {/* Cancel */}
                           {(wo.status === "Pending" ||
                             wo.status === "Assigned") && (
-                            <div className="group relative">
-                              <button
-                                type="button"
-                                onClick={() => openAction(wo, "cancel")}
-                                className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-red-600 bg-white text-xs text-red-600 transition hover:bg-red-600 hover:text-white"
-                              >
-                                <XCircle className="h-4 w-4" />
-                              </button>
-                              <div className="pointer-events-none absolute bottom-full left-1/2 z-50 mb-1 hidden -translate-x-1/2 rounded bg-gray-900 px-2 py-1 text-xs text-white group-hover:block">
-                                Cancel
+                              <div className="group relative">
+                                <button
+                                  type="button"
+                                  onClick={() => openAction(wo, "cancel")}
+                                  className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-red-600 bg-white text-xs text-red-600 transition hover:bg-red-600 hover:text-white"
+                                >
+                                  <XCircle className="h-4 w-4" />
+                                </button>
+                                <div className="pointer-events-none absolute bottom-full left-1/2 z-50 mb-1 hidden -translate-x-1/2 rounded bg-gray-900 px-2 py-1 text-xs text-white group-hover:block">
+                                  Cancel
+                                </div>
                               </div>
-                            </div>
-                          )}
+                            )}
                         </div>
                       )}
                     </div>
@@ -1036,11 +1049,10 @@ export default function DispatcherWorkOrders() {
                   key={tab.key}
                   type="button"
                   onClick={() => setActiveTab(tab.key)}
-                  className={`inline-flex items-center justify-center rounded-md px-2 py-1 text-xs transition ${
-                    activeTab === tab.key
+                  className={`inline-flex items-center justify-center rounded-md px-2 py-1 text-xs transition ${activeTab === tab.key
                       ? "bg-white text-[#c20001] shadow-sm"
                       : "bg-transparent text-gray-700 hover:bg-white"
-                  }`}
+                    }`}
                 >
                   {tab.label} ({countByStatus(tab.key)})
                 </button>

@@ -60,7 +60,7 @@ const AdminPaymentsPage = () => {
   const [loading, setLoading] = useState(false);
 
   const [selectedPayment, setSelectedPayment] = useState(null);
-console.log(stats, "lala stats")
+
   // ---- Load stats ----
   const fetchStats = async () => {
   try {

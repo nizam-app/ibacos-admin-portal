@@ -18,7 +18,7 @@ import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts";
 
 import AddEditTechnicianModal from "../../components/technicians/AddEditTechnicianModal";
 import { BlockTechnicianModal } from "../../components/technicians/BlockTechnicianModal";
-import TechnicianAPI from "../../api/techniciansApi";
+import TechnicianAPI from "../../api/TechnicianAPI";
 
 // KPI colors (Electrical, General, HVAC, Plumbing, others)
 const COLORS = [
@@ -51,8 +51,8 @@ const mapApiTechToUi = (t) => {
     t.isBlocked === true
       ? "Blocked"
       : t.status === "INACTIVE"
-      ? "Inactive"
-      : "Active";
+        ? "Inactive"
+        : "Active";
 
   const employmentType =
     t.type === "INTERNAL" || t.employmentType === "Employee"
@@ -103,6 +103,11 @@ const mapApiTechToUi = (t) => {
 };
 
 const DispatcherTechnicians = () => {
+
+  const [defaultFreelancerRate, setDefaultFreelancerRate] = useState(null);
+const [defaultInternalBonusRate, setDefaultInternalBonusRate] = useState(null);
+
+
   const [technicians, setTechnicians] = useState([]);
   const [loading, setLoading] = useState(false);
 
@@ -143,9 +148,29 @@ const DispatcherTechnicians = () => {
       setLoading(false);
     }
   };
+  const loadDefaultRates = async () => {
+  try {
+    const [freelancerRes, internalRes] = await Promise.all([
+      TechnicianAPI.getDefaultRate("FREELANCER"),
+      TechnicianAPI.getDefaultRate("INTERNAL"),
+    ]);
+
+    setDefaultFreelancerRate(
+      freelancerRes.data?.ratePercentage ?? null // e.g. 14
+    );
+    setDefaultInternalBonusRate(
+      internalRes.data?.ratePercentage ?? null // e.g. 5
+    );
+  } catch (err) {
+    console.error("Failed to load default rates", err);
+    // eta optional: alert deoya lagbe na, silent thakleo chole
+  }
+};
+
 
   useEffect(() => {
     loadTechnicians();
+    loadDefaultRates();
   }, []);
 
   // ---------- helpers ----------
@@ -229,8 +254,8 @@ const DispatcherTechnicians = () => {
         filterType === "all"
           ? "All"
           : filterType === "Freelancer"
-          ? "FREELANCER"
-          : "INTERNAL";
+            ? "FREELANCER"
+            : "INTERNAL";
 
       const res = await TechnicianAPI.exportCsv({
         specialization:
@@ -284,15 +309,20 @@ const DispatcherTechnicians = () => {
       joinDate: data.joinDate,
       specialization: data.specialty,
       type:
-        data.employmentType === "Internal Employee" ? "Internal" : "Freelancer",
+        data.employmentType === "Internal Employee"
+          ? "INTERNAL"
+          : "FREELANCER",
       homeAddress: data.homeAddress || null,
       academicTitle: data.academicTitle || null,
     };
+    if (data.password) {
+      payload.password = data.password;
+    }
 
     if (data.employmentType === "Freelancer") {
       const rateSrc =
         data.commissionRateOverride != null &&
-        data.commissionRateOverride !== ""
+          data.commissionRateOverride !== ""
           ? data.commissionRateOverride
           : data.commissionRate;
       const rateNumber = rateSrc ? Number(rateSrc) : null;
@@ -329,6 +359,12 @@ const DispatcherTechnicians = () => {
         // Update existing technician
         const payload = buildPayloadFromForm(formValues);
         await TechnicianAPI.updateTechnician(editingTechnician.id, payload);
+        if (formValues.documentsFormData) {
+        await TechnicianAPI.uploadDocuments(
+          editingTechnician.id,
+          formValues.documentsFormData
+        );
+      }
 
         Swal.fire({
           icon: "success",
@@ -480,11 +516,10 @@ const DispatcherTechnicians = () => {
                 <button
                   type="button"
                   onClick={clearSpecializationFilters}
-                  className={`px-3 py-1.5 rounded-full text-sm border ${
-                    selectedSpecializations.length === 0
-                      ? "bg-[#c20001] text-white border-[#c20001]"
-                      : "bg-white text-gray-700 border-gray-300 hover:border-gray-400"
-                  }`}
+                  className={`px-3 py-1.5 rounded-full text-sm border ${selectedSpecializations.length === 0
+                    ? "bg-[#c20001] text-white border-[#c20001]"
+                    : "bg-white text-gray-700 border-gray-300 hover:border-gray-400"
+                    }`}
                 >
                   All
                 </button>
@@ -496,11 +531,10 @@ const DispatcherTechnicians = () => {
                       key={spec}
                       type="button"
                       onClick={() => toggleSpecialization(spec)}
-                      className={`px-3 py-1.5 rounded-full text-sm border flex items-center gap-1 ${
-                        active
-                          ? "bg-[#c20001] text-white border-[#c20001]"
-                          : "bg-white text-gray-700 border-gray-300 hover:border-gray-400"
-                      }`}
+                      className={`px-3 py-1.5 rounded-full text-sm border flex items-center gap-1 ${active
+                        ? "bg-[#c20001] text-white border-[#c20001]"
+                        : "bg-white text-gray-700 border-gray-300 hover:border-gray-400"
+                        }`}
                     >
                       <span>{spec}</span>
                       {active && <span className="text-xs">✕</span>}
@@ -637,11 +671,10 @@ const DispatcherTechnicians = () => {
               <button
                 type="button"
                 onClick={() => setFilterType("all")}
-                className={`px-3 py-1.5 rounded-full text-sm border ${
-                  filterType === "all"
-                    ? "bg-[#c20001] text-white border-[#c20001]"
-                    : "bg-white text-gray-700 border-gray-300 hover:border-gray-400"
-                }`}
+                className={`px-3 py-1.5 rounded-full text-sm border ${filterType === "all"
+                  ? "bg-[#c20001] text-white border-[#c20001]"
+                  : "bg-white text-gray-700 border-gray-300 hover:border-gray-400"
+                  }`}
               >
                 All ({totalTechniciansAll})
               </button>
@@ -649,11 +682,10 @@ const DispatcherTechnicians = () => {
               <button
                 type="button"
                 onClick={() => setFilterType("Freelancer")}
-                className={`px-3 py-1.5 rounded-full text-sm border inline-flex items-center gap-1 ${
-                  filterType === "Freelancer"
-                    ? "bg-purple-600 text-white border-purple-600"
-                    : "bg-white text-gray-700 border-gray-300 hover:border-gray-400"
-                }`}
+                className={`px-3 py-1.5 rounded-full text-sm border inline-flex items-center gap-1 ${filterType === "Freelancer"
+                  ? "bg-purple-600 text-white border-purple-600"
+                  : "bg-white text-gray-700 border-gray-300 hover:border-gray-400"
+                  }`}
               >
                 <BriefcaseBusiness className="w-3 h-3" />
                 Freelancers ({freelancersCount})
@@ -662,11 +694,10 @@ const DispatcherTechnicians = () => {
               <button
                 type="button"
                 onClick={() => setFilterType("Internal Employee")}
-                className={`px-3 py-1.5 rounded-full text-sm border inline-flex items-center gap-1 ${
-                  filterType === "Internal Employee"
-                    ? "bg-blue-600 text-white border-blue-600"
-                    : "bg-white text-gray-700 border-gray-300 hover:border-gray-400"
-                }`}
+                className={`px-3 py-1.5 rounded-full text-sm border inline-flex items-center gap-1 ${filterType === "Internal Employee"
+                  ? "bg-blue-600 text-white border-blue-600"
+                  : "bg-white text-gray-700 border-gray-300 hover:border-gray-400"
+                  }`}
               >
                 <UsersIcon className="w-3 h-3" />
                 Employees ({employeesCount})
@@ -719,11 +750,10 @@ const DispatcherTechnicians = () => {
               <button
                 type="button"
                 onClick={() => setFilterType("all")}
-                className={`px-3 py-1.5 rounded-full text-sm border ${
-                  filterType === "all"
-                    ? "bg-[#c20001] text-white border-[#c20001]"
-                    : "bg-white text-gray-700 border-gray-300 hover:border-gray-400"
-                }`}
+                className={`px-3 py-1.5 rounded-full text-sm border ${filterType === "all"
+                  ? "bg-[#c20001] text-white border-[#c20001]"
+                  : "bg-white text-gray-700 border-gray-300 hover:border-gray-400"
+                  }`}
               >
                 All ({totalTechniciansAll})
               </button>
@@ -731,11 +761,10 @@ const DispatcherTechnicians = () => {
               <button
                 type="button"
                 onClick={() => setFilterType("Freelancer")}
-                className={`px-3 py-1.5 rounded-full text-sm border inline-flex items-center gap-1 ${
-                  filterType === "Freelancer"
-                    ? "bg-purple-600 text-white border-purple-600"
-                    : "bg-white text-gray-700 border-gray-300 hover:border-gray-400"
-                }`}
+                className={`px-3 py-1.5 rounded-full text-sm border inline-flex items-center gap-1 ${filterType === "Freelancer"
+                  ? "bg-purple-600 text-white border-purple-600"
+                  : "bg-white text-gray-700 border-gray-300 hover:border-gray-400"
+                  }`}
               >
                 <BriefcaseBusiness className="w-3 h-3" />
                 Freelancers ({freelancersCount})
@@ -744,11 +773,10 @@ const DispatcherTechnicians = () => {
               <button
                 type="button"
                 onClick={() => setFilterType("Internal Employee")}
-                className={`px-3 py-1.5 rounded-full text-sm border inline-flex items-center gap-1 ${
-                  filterType === "Internal Employee"
-                    ? "bg-blue-600 text-white border-blue-600"
-                    : "bg-white text-gray-700 border-gray-300 hover:border-gray-400"
-                }`}
+                className={`px-3 py-1.5 rounded-full text-sm border inline-flex items-center gap-1 ${filterType === "Internal Employee"
+                  ? "bg-blue-600 text-white border-blue-600"
+                  : "bg-white text-gray-700 border-gray-300 hover:border-gray-400"
+                  }`}
               >
                 <UsersIcon className="w-3 h-3" />
                 Employees ({employeesCount})
@@ -785,11 +813,10 @@ const DispatcherTechnicians = () => {
               {filteredTechnicians.map((tech) => (
                 <div
                   key={tech.id}
-                  className={`border rounded-xl p-4 ${
-                    tech.status === "Blocked"
-                      ? "bg-red-50 border-red-200"
-                      : "bg-white border-gray-200"
-                  }`}
+                  className={`border rounded-xl p-4 ${tech.status === "Blocked"
+                    ? "bg-red-50 border-red-200"
+                    : "bg-white border-gray-200"
+                    }`}
                 >
                   <div className="flex items-start justify-between mb-3">
                     <div>
@@ -951,6 +978,8 @@ const DispatcherTechnicians = () => {
           onSave={handleSaveTechnician}
           technician={editingTechnician}
           userRole={userRole}
+          defaultFreelancerRate={defaultFreelancerRate}
+          defaultInternalBonusRate={defaultInternalBonusRate}
         />
       )}
     </div>

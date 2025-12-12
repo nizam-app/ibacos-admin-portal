@@ -40,6 +40,8 @@ const TechnicianAPI = {
       params,
       responseType: "blob",
     }),
+  getDefaultRate: (techType) =>
+    axiosClient.get(`/rates/default/${techType}`),
 };
 
 export default TechnicianAPI;

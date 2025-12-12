@@ -5,11 +5,22 @@ const CategoriesAPI = {
   // ----- Categories -----
   getCategories: () => axiosClient.get("/categories"),
 
-  // body: { name, description, image? }
-  createCategory: (body) => axiosClient.post("/categories", body),
+// body: JSON object or FormData
+createCategory: (body, isFormData = false) =>
+  axiosClient.post("/categories", body, {
+    headers: isFormData
+      ? { "Content-Type": "multipart/form-data" }
+      : undefined,
+  }),
 
-  // body: { name, description, image? }
-  updateCategory: (id, body) => axiosClient.patch(`/categories/${id}`, body),
+// body: JSON object or FormData
+updateCategory: (id, body, isFormData = false) =>
+  axiosClient.patch(`/categories/${id}`, body, {
+    headers: isFormData
+      ? { "Content-Type": "multipart/form-data" }
+      : undefined,
+  }),
+
 
   deleteCategory: (id) => axiosClient.delete(`/categories/${id}`),
 

@@ -15,91 +15,70 @@ import axiosClient from "../../api/axiosClient";
 const Dashboard = () => {
   const navigate = useNavigate();
 
+  // 🔹 Summary state – এখানে label গুলোও রাখছি, যাতে backend থেকে আসা text UI তেও দেখাতে পারি
   const [summary, setSummary] = useState({
     total: 0,
+    totalLabel: "All time SRs",
+
     pending: 0,
+    pendingLabel: "Awaiting action",
+
     inProgress: 0,
+    inProgressLabel: "Being worked on",
+
     resolved: 0,
+    resolvedLabel: "Completed SRs",
+
     openToday: 0,
+    openTodayLabel: "Opened today",
+
+    avgDispatchTimeLabel: "—",
   });
+
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  // ---- API: /sr ----
+  // ---- API: /call-center/stats ----
   useEffect(() => {
-    const fetchSRs = async () => {
+    const fetchStats = async () => {
       try {
         setLoading(true);
         setError("");
 
-        const res = await axiosClient.get("/sr");
-        const data = res.data || []; // API theke asha SR array
+        const res = await axiosClient.get("/call-center/stats");
+        const stats = res.data?.stats || {};
 
-        const total = data.length;
-        console.log( "call center stats", data)
+        const totalServiceRequests = stats.totalServiceRequests || {};
+        const pending = stats.pending || {};
+        const inProgress = stats.inProgress || {};
+        const resolved = stats.resolved || {};
+        const openSRsToday = stats.openSRsToday || {};
+        const avgTimeToDispatch = stats.avgTimeToDispatch || {};
 
-        // 👉 ei mapping ta pore backend final logic onujayi change korte parba
-        const pendingStatuses = ["PENDING_APPROVAL"];
-        const inProgressStatuses = [
-          "CONVERTED_TO_WO",
-          "IN_PROGRESS",
-          "ASSIGNED",
-          "UNASSIGNED",
-          "COMPLETED_PENDING_PAYMENT",
-        ];
-        const resolvedStatuses = [
-          "RESOLVED",
-          "COMPLETED",
-          "COMPLETED_PAID",
-        ];
-
-        let pending = 0;
-        let inProgress = 0;
-        let resolved = 0;
-        let openToday = 0;
-
-        const todayStr = new Date().toDateString();
-
-        data.forEach((sr) => {
-          const srStatus = sr.status;
-          const woStatus = sr.woStatus;
-
-          // Pending = NEW / OPEN / PENDING
-          if (pendingStatuses.includes(srStatus)) {
-            pending += 1;
-          }
-
-          // In progress = woStatus ba srStatus jokhon kaj cholche
-          if (
-            inProgressStatuses.includes(woStatus) ||
-            inProgressStatuses.includes(srStatus)
-          ) {
-            inProgress += 1;
-          }
-
-          // Resolved = SR/WO completed types
-          if (
-            resolvedStatuses.includes(woStatus) ||
-            resolvedStatuses.includes(srStatus)
-          ) {
-            resolved += 1;
-          }
-
-          // Aajker open SR (cancelled / resolved chara)
-          const createdDate = new Date(sr.createdAt);
-          const isToday = createdDate.toDateString() === todayStr;
-          const isOpen = !["CANCELLED", "RESOLVED"].includes(srStatus);
-          if (isToday && isOpen) {
-            openToday += 1;
-          }
-        });
+        // hours থেকে fallback label বানিয়ে নিচ্ছি (যদি backend label না পাঠায়)
+        const avgLabelFromHours =
+          typeof avgTimeToDispatch.hours === "number"
+            ? `${avgTimeToDispatch.hours} hrs`
+            : "—";
 
         setSummary({
-          total,
-          pending,
-          inProgress,
-          resolved,
-          openToday,
+          total: totalServiceRequests.count ?? 0,
+          totalLabel: totalServiceRequests.label || "All time SRs",
+
+          pending: pending.count ?? 0,
+          pendingLabel: pending.label || "Awaiting action",
+
+          inProgress: inProgress.count ?? 0,
+          inProgressLabel: inProgress.label || "Being worked on",
+
+          resolved: resolved.count ?? 0,
+          resolvedLabel: resolved.label || "Completed SRs",
+
+          openToday: openSRsToday.count ?? 0,
+          openTodayLabel: openSRsToday.label || "Opened today",
+
+          avgDispatchTimeLabel:
+            avgTimeToDispatch.label || avgLabelFromHours,
         });
       } catch (err) {
         console.error(err);
@@ -111,15 +90,15 @@ const Dashboard = () => {
       }
     };
 
-    fetchSRs();
+    fetchStats();
   }, []);
 
-  // ---- Cards config (values now come from API) ----
+  // ---- Cards config (values now come directly from stats API) ----
   const summaryCards = [
     {
       title: "Total Service Requests",
       value: summary.total,
-      subtitle: "All time SRs",
+      subtitle: summary.totalLabel,
       valueClass: "text-[#c20001]",
       Icon: FileText,
       iconColor: "text-[#c20001]",
@@ -127,7 +106,7 @@ const Dashboard = () => {
     {
       title: "Pending",
       value: summary.pending,
-      subtitle: "Awaiting action",
+      subtitle: summary.pendingLabel,
       valueClass: "text-[#ffb111]",
       Icon: Clock3,
       iconColor: "text-[#ffb111]",
@@ -135,7 +114,7 @@ const Dashboard = () => {
     {
       title: "In Progress",
       value: summary.inProgress,
-      subtitle: "Being worked on",
+      subtitle: summary.inProgressLabel,
       valueClass: "text-[#f97316]",
       Icon: AlertTriangle,
       iconColor: "text-[#f97316]",
@@ -143,19 +122,16 @@ const Dashboard = () => {
     {
       title: "Resolved",
       value: summary.resolved,
-      subtitle: "Completed SRs",
+      subtitle: summary.resolvedLabel,
       valueClass: "text-[#16a34a]",
       Icon: CheckCircle2,
       iconColor: "text-[#16a34a]",
     },
   ];
 
-
-  console.log("summaryCards", summaryCards)
   const todayStats = {
     openToday: summary.openToday,
-    // Backend jokhon avg dispatch time dibe, ekhane replace korbe
-    avgDispatchTime: "1.2 hrs",
+    avgDispatchTime: summary.avgDispatchTimeLabel,
   };
 
   return (
@@ -172,7 +148,7 @@ const Dashboard = () => {
 
           {loading && (
             <p className="mt-2 text-xs text-gray-400">
-              Loading latest service requests...
+              Loading latest stats...
             </p>
           )}
           {error && (
@@ -213,7 +189,9 @@ const Dashboard = () => {
             >
               {loading ? "—" : card.value}
             </p>
-            <p className="text-sm text-gray-500">{card.subtitle}</p>
+            <p className="text-sm text-gray-500">
+              {card.subtitle}
+            </p>
           </div>
         ))}
       </div>
@@ -235,7 +213,7 @@ const Dashboard = () => {
           <span className="text-gray-600">
             Avg Time to Dispatch:
             <span className="ml-1 font-semibold text-[#ffb111]">
-              {todayStats.avgDispatchTime}
+              {loading ? "—" : todayStats.avgDispatchTime}
             </span>
           </span>
         </div>

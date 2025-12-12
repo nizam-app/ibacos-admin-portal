@@ -213,10 +213,11 @@ const AdminCategoriesManagementPage = () => {
   });
 
   const [categoryForm, setCategoryForm] = useState({
-    name: "",
-    description: "",
-    image: "",
-  });
+  name: "",
+  description: "",
+  image: "",      // পুরনো/এক্সিস্টিং URL (backend থেকে আসা)
+  imageFile: null // নতুন upload করা file
+});
 
   // service এ এখন শুধু name + description
   const [serviceForm, setServiceForm] = useState({
@@ -294,48 +295,80 @@ const AdminCategoriesManagementPage = () => {
   // Category management
   // -----------------------------------------------------
   const handleAddCategory = () => {
-    setEditingCategory(null);
-    setCategoryForm({ name: "", description: "", image: "" });
-    setIsCategoryModalOpen(true);
-  };
+  setEditingCategory(null);
+  setCategoryForm({
+    name: "",
+    description: "",
+    image: "",
+    imageFile: null,
+  });
+  setIsCategoryModalOpen(true);
+};
 
   const handleEditCategory = (category) => {
-    setEditingCategory(category);
-    setCategoryForm({
-      name: category.name,
-      description: category.description,
-      image: category.image || "",
-    });
-    setIsCategoryModalOpen(true);
-  };
+  setEditingCategory(category);
+  setCategoryForm({
+    name: category.name || "",
+    description: category.description || "",
+    image: category.image || "",  // preview/show করার জন্য
+    imageFile: null,              // edit শুরুতে new file নাই
+  });
+  setIsCategoryModalOpen(true);
+};
 
   const handleSaveCategory = async () => {
-    if (!categoryForm.name || !categoryForm.description) {
-      await Swal.fire({
-        icon: "error",
-        title: "Missing fields",
-        text: "Please fill in category name and description.",
-        confirmButtonColor: "#c20001",
-      });
-      return;
+  if (!categoryForm.name || !categoryForm.description) {
+    await Swal.fire({
+      icon: "error",
+      title: "Missing fields",
+      text: "Please fill in category name and description.",
+      confirmButtonColor: "#c20001",
+    });
+    return;
+  }
+
+  try {
+    setIsSavingCategory(true);
+
+    // ✅ 1) ঠিক করবো payload FormData হবে নাকি normal JSON
+    let payload;
+    let isFormData = false;
+
+    if (categoryForm.imageFile) {
+      // 👉 new image file দিলে FormData use করবো
+      const formData = new FormData();
+      formData.append("name", categoryForm.name);
+      formData.append("description", categoryForm.description);
+      formData.append("image", categoryForm.imageFile); // backend field name = "image"
+
+      payload = formData;
+      isFormData = true;
+    } else {
+      // 👉 file না থাকলে পুরনো JSON flow // (image URL থাকলে চাইলে পাঠাতে পারো)
+      payload = {
+        name: categoryForm.name,
+        description: categoryForm.description,
+        image: categoryForm.image || null,
+      };
+      isFormData = false;
     }
 
-    try {
-      setIsSavingCategory(true);
+    if (editingCategory) {
+      // ======================
+      // UPDATE CATEGORY
+      // ======================
+      const res = await CategoriesAPI.updateCategory(
+        editingCategory.id,
+        payload,
+        isFormData // 👈 এই extra flag টা নিচে CategoriesAPI তে handle করবো
+      );
 
-      if (editingCategory) {
-        const res = await CategoriesAPI.updateCategory(editingCategory.id, {
-          name: categoryForm.name,
-          description: categoryForm.description,
-          image: categoryForm.image || null,
-        });
+      const apiCat = res.data?.category || res.data;
 
-        const apiCat = res.data?.category || res.data;
-
-        setCategories((prev) =>
-          prev.map((c) =>
-            c.id === String(editingCategory.id)
-              ? {
+      setCategories((prev) =>
+        prev.map((c) =>
+          c.id === String(editingCategory.id)
+            ? {
                 ...c,
                 name: apiCat?.name ?? categoryForm.name,
                 description: apiCat?.description ?? categoryForm.description,
@@ -345,59 +378,57 @@ const AdminCategoriesManagementPage = () => {
                     : c.isActive,
                 image:
                   apiCat && apiCat.image != null
-                    ? apiCat.image
-                    : (categoryForm.image || null),
-
+                    ? apiCat.image // backend new URL দিলে
+                    : c.image, // না দিলে পুরনোটাই রাখবো
               }
-              : c
-          )
-        );
+            : c
+        )
+      );
 
-        await Swal.fire({
-          icon: "success",
-          title: "Category updated",
-          confirmButtonColor: "#c20001",
-        });
-      } else {
-        const res = await CategoriesAPI.createCategory({
-          name: categoryForm.name,
-          description: categoryForm.description,
-          image: categoryForm.image || null,
-        });
-
-        const apiCat = res.data?.category || res.data;
-
-        const newCategory = {
-          id: String(apiCat.id),
-          name: apiCat.name,
-          description: apiCat.description,
-          isActive: !!apiCat.isActive,
-          image: apiCat.image || null,
-          services: [],
-        };
-
-        setCategories((prev) => [...prev, newCategory]);
-
-        await Swal.fire({
-          icon: "success",
-          title: "Category created",
-          confirmButtonColor: "#c20001",
-        });
-      }
-
-      setIsCategoryModalOpen(false);
-    } catch (error) {
-      console.error("Save category failed", error);
       await Swal.fire({
-        icon: "error",
-        title: "Save failed",
-        text: "Could not save category. Please try again.",
+        icon: "success",
+        title: "Category updated",
         confirmButtonColor: "#c20001",
       });
-    } finally {
-      setIsSavingCategory(false);
+    } else {
+      // ======================
+      // CREATE CATEGORY
+      // ======================
+      const res = await CategoriesAPI.createCategory(payload, isFormData);
+      const apiCat = res.data?.category || res.data;
+
+      const newCategory = {
+        id: String(apiCat.id),
+        name: apiCat.name,
+        description: apiCat.description,
+        isActive: !!apiCat.isActive,
+        image: apiCat.image || null,
+        services: [],
+      };
+
+      setCategories((prev) => [...prev, newCategory]);
+
+      await Swal.fire({
+        icon: "success",
+        title: "Category created",
+        confirmButtonColor: "#c20001",
+      });
     }
-  };
+
+    setIsCategoryModalOpen(false);
+  } catch (error) {
+    console.error("Save category failed", error);
+    await Swal.fire({
+      icon: "error",
+      title: "Save failed",
+      text: "Could not save category. Please try again.",
+      confirmButtonColor: "#c20001",
+    });
+  } finally {
+    setIsSavingCategory(false);
+  }
+};
+
 
   const handleToggleCategory = async (id) => {
     const category = categories.find((c) => c.id === id);
@@ -1012,8 +1043,8 @@ const AdminCategoriesManagementPage = () => {
                   <div
                     key={category.id}
                     className={`border rounded-lg ${category.isActive
-                        ? "border-gray-200 bg-white"
-                        : "border-gray-200 bg-gray-50 opacity-70"
+                      ? "border-gray-200 bg-white"
+                      : "border-gray-200 bg-gray-50 opacity-70"
                       }`}
                   >
                     {/* Category header */}
@@ -1378,6 +1409,7 @@ const AdminCategoriesManagementPage = () => {
         }
       >
         <div className="space-y-4">
+          {/* Name */}
           <div>
             <Label htmlFor="cat-name">Category name *</Label>
             <Input
@@ -1392,6 +1424,8 @@ const AdminCategoriesManagementPage = () => {
               placeholder="e.g. General Maintenance"
             />
           </div>
+
+          {/* Description */}
           <div>
             <Label htmlFor="cat-desc">Description *</Label>
             <Textarea
@@ -1407,25 +1441,50 @@ const AdminCategoriesManagementPage = () => {
               placeholder="Short description used in customer app."
             />
           </div>
+
+          {/* Image upload (file instead of URL) */}
           <div>
-            <Label htmlFor="cat-image">Image URL</Label>
-            <Input
+            <Label htmlFor="cat-image">Category image</Label>
+
+            {/* Existing image preview (edit mode) */}
+            {editingCategory && editingCategory.image && (
+              <div className="mb-2">
+                <p className="text-[11px] text-gray-500 mb-1">Current image:</p>
+                <img
+                  src={editingCategory.image}
+                  alt={editingCategory.name}
+                  className="h-16 w-16 rounded-lg object-cover border border-gray-200"
+                />
+              </div>
+            )}
+
+            <input
               id="cat-image"
-              value={categoryForm.image}
-              onChange={(e) =>
+              type="file"
+              accept="image/*"
+              onChange={(e) => {
+                const file = e.target.files?.[0] || null;
+
                 setCategoryForm((prev) => ({
                   ...prev,
-                  image: e.target.value,
-                }))
-              }
-              placeholder="https://example.com/category-image.jpg"
+                  // file ta state e rakhbo
+                  imageFile: file,
+                }));
+              }}
+              className="mt-1 block w-full text-sm text-gray-900
+          file:mr-4 file:py-2 file:px-4
+          file:rounded-md file:border-0
+          file:text-sm file:font-semibold
+          file:bg-[#c20001]/10 file:text-[#c20001]
+          hover:file:bg-[#c20001]/20
+          border border-gray-300 rounded-lg"
             />
             <p className="mt-1 text-[11px] text-gray-500">
-              Optional. Stored as <code>image</code> in the backend and shown as
-              the category thumbnail.
+              Optional. If you don&apos;t upload a new image, the existing one will be kept.
             </p>
           </div>
 
+          {/* Actions */}
           <div className="pt-2 flex justify-end gap-2">
             <Button
               variant="outline"
@@ -1439,6 +1498,7 @@ const AdminCategoriesManagementPage = () => {
           </div>
         </div>
       </Modal>
+
 
       {/* Service Modal */}
       <Modal

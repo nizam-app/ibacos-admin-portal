@@ -1,5 +1,4 @@
-// src/pages/administrator/AdminCommissionRatesPage.jsx
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import Swal from "sweetalert2";
 import {
   Percent,
@@ -9,7 +8,9 @@ import {
   Plus,
   Pencil,
   Trash2,
+  Star,
 } from "lucide-react";
+import RatesAPI from "../../api/ratesApi";
 
 // ---------------------------------------------------------
 // Small Tailwind UI helpers (no shadcn imports)
@@ -63,7 +64,7 @@ const Button = ({
   ...props
 }) => {
   const base =
-    "inline-flex items-center justify-center rounded-lg font-medium focus:outline-none focus:ring-2 focus:ring-offset-1 transition-colors";
+    "inline-flex items-center justify-center rounded-lg font-medium focus:outline-none focus:ring-2 focus:ring-offset-1 transition-colors disabled:opacity-60 disabled:cursor-not-allowed";
   const variants = {
     solid: "bg-[#c20001] text-white hover:bg-[#a00001]",
     outline:
@@ -149,55 +150,63 @@ const Modal = ({ open, title, description, onClose, children }) => {
 };
 
 // ---------------------------------------------------------
-// Main Page Component
+// Helpers – backend -> UI mapping
 // ---------------------------------------------------------
 
 /**
  * @typedef {"Commission" | "Bonus"} RateType
  * @typedef {"Freelancer" | "Internal Employee"} EmploymentType
- */
-
-/**
+ *
  * @typedef {Object} Rate
- * @property {string} id
+ * @property {number} id
+ * @property {string} rateId
+ * @property {string} name
  * @property {RateType} type
  * @property {EmploymentType} employmentType
- * @property {number} rate
+ * @property {number} rate            // percent value (10, 12, 5...)
  * @property {string} description
+ * @property {boolean} isDefault
  */
+
+const mapBackendRateToUI = (item) => {
+  const type = item.type === "BONUS" ? "Bonus" : "Commission";
+  const employmentType =
+    item.techType === "INTERNAL"
+      ? "Internal Employee"
+      : "Freelancer";
+
+  return {
+    id: item.id,
+    rateId: item.rateId,
+    name: item.name,
+    type,
+    employmentType,
+    rate:
+      typeof item.ratePercentage === "number"
+        ? item.ratePercentage
+        : typeof item.rate === "number"
+        ? item.rate * 100
+        : 0,
+    description: item.description || "",
+    isDefault: !!item.isDefault,
+    raw: item,
+  };
+};
+
+// ---------------------------------------------------------
+// Main Page Component
+// ---------------------------------------------------------
 
 const AdminCommissionRatesPage = () => {
   /** @type {[Rate[], Function]} */
-  const [rates, setRates] = useState([
-    {
-      id: "RATE001",
-      type: "Commission",
-      employmentType: "Freelancer",
-      rate: 10,
-      description: "Standard commission for freelance technicians",
-    },
-    {
-      id: "RATE002",
-      type: "Commission",
-      employmentType: "Freelancer",
-      rate: 12,
-      description: "Premium commission for senior freelance technicians",
-    },
-    {
-      id: "RATE003",
-      type: "Bonus",
-      employmentType: "Internal Employee",
-      rate: 5,
-      description: "Performance bonus for junior employees",
-    },
-    {
-      id: "RATE004",
-      type: "Bonus",
-      employmentType: "Internal Employee",
-      rate: 6,
-      description: "Performance bonus for senior employees",
-    },
-  ]);
+  const [rates, setRates] = useState([]);
+
+  const [stats, setStats] = useState({
+    commissionCount: 0,
+    commissionAvg: "",
+    bonusCount: 0,
+    bonusAvg: "",
+  });
 
   const [isRateModalOpen, setIsRateModalOpen] = useState(false);
   /** @type {[Rate|null, Function]} */
@@ -209,6 +218,65 @@ const AdminCommissionRatesPage = () => {
     rate: "",
     description: "",
   });
+
+  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  // -----------------------------------------------------
+  // Load summary + all rates from backend
+  // -----------------------------------------------------
+
+  const loadSummary = async () => {
+    try {
+      const res = await RatesAPI.getSummary();
+      const payload = res.data;
+      const summary = payload.stats || payload;
+
+      const commission = summary.commissionRates || {};
+      const bonus = summary.bonusRates || {};
+
+      setStats({
+        commissionCount: commission.count || 0,
+        commissionAvg: commission.avgRateDisplay || "",
+        bonusCount: bonus.count || 0,
+        bonusAvg: bonus.avgRateDisplay || "",
+      });
+    } catch (err) {
+      console.error("Failed to load rates summary", err);
+      // এখানে hard error দেখানো লাগলে চাইলে error state এ append করতে পারো
+    }
+  };
+
+  const loadRates = async () => {
+    try {
+      setLoading(true);
+      setError("");
+
+      const res = await RatesAPI.getAllRates();
+      const list = Array.isArray(res.data)
+        ? res.data
+        : Array.isArray(res.data?.rates)
+        ? res.data.rates
+        : [];
+
+      setRates(list.map(mapBackendRateToUI));
+    } catch (err) {
+      console.error("Failed to load rates", err);
+      setError(
+        err?.response?.data?.message ||
+          "Failed to load commission & bonus rates."
+      );
+      setRates([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadSummary();
+    loadRates();
+  }, []);
 
   // -----------------------------------------------------
   // Helpers
@@ -223,19 +291,24 @@ const AdminCommissionRatesPage = () => {
   );
 
   const avgCommission =
-    commissionRates.length > 0
+    stats.commissionAvg && typeof stats.commissionAvg === "string"
+      ? stats.commissionAvg
+      : commissionRates.length > 0
       ? (
           commissionRates.reduce((sum, r) => sum + r.rate, 0) /
           commissionRates.length
-        ).toFixed(1)
-      : "0";
+        ).toFixed(1) + "%"
+      : "0%";
 
   const avgBonus =
-    bonusRates.length > 0
+    stats.bonusAvg && typeof stats.bonusAvg === "string"
+      ? stats.bonusAvg
+      : bonusRates.length > 0
       ? (
-          bonusRates.reduce((sum, r) => sum + r.rate, 0) / bonusRates.length
-        ).toFixed(1)
-      : "0";
+          bonusRates.reduce((sum, r) => sum + r.rate, 0) /
+          bonusRates.length
+        ).toFixed(1) + "%"
+      : "0%";
 
   // -----------------------------------------------------
   // Rate management
@@ -262,6 +335,18 @@ const AdminCommissionRatesPage = () => {
     setIsRateModalOpen(true);
   };
 
+  const handleTypeChange = (type) => {
+    // existing rate edit করলে type পরিবর্তন হতে দিচ্ছি না
+    if (editingRate) return;
+
+    setRateForm((prev) => ({
+      ...prev,
+      type,
+      employmentType:
+        type === "Commission" ? "Freelancer" : "Internal Employee",
+    }));
+  };
+
   const handleSaveRate = async () => {
     if (!rateForm.rate || !rateForm.description) {
       await Swal.fire({
@@ -270,52 +355,91 @@ const AdminCommissionRatesPage = () => {
         text: "Please fill in rate and description.",
         confirmButtonColor: "#c20001",
       });
-    } else {
-      const rateVal = parseFloat(rateForm.rate);
-      if (Number.isNaN(rateVal) || rateVal < 0 || rateVal > 100) {
+      return;
+    }
+
+    const rateVal = parseFloat(rateForm.rate);
+    if (Number.isNaN(rateVal) || rateVal < 0 || rateVal > 100) {
+      await Swal.fire({
+        icon: "error",
+        title: "Invalid rate",
+        text: "Rate must be a number between 0 and 100.",
+        confirmButtonColor: "#c20001",
+      });
+      return;
+    }
+
+    const backendType =
+      rateForm.type === "Commission" ? "COMMISSION" : "BONUS";
+    const backendTechType =
+      rateForm.type === "Commission" ? "FREELANCER" : "INTERNAL";
+    const rateDecimal = rateVal / 100;
+
+    try {
+      setSaving(true);
+
+      if (editingRate) {
+        // UPDATE
+        const payload = {
+          // name not editable from UI এখন – আগের name রেই use করছি
+          name: editingRate.name || rateForm.description || "Updated rate",
+          rate: rateDecimal,
+          description: rateForm.description,
+        };
+
+        const res = await RatesAPI.updateRate(editingRate.id, payload);
+        const updated = mapBackendRateToUI(res.data.rate);
+
+        setRates((prev) =>
+          prev.map((r) => (r.id === updated.id ? updated : r))
+        );
+
         await Swal.fire({
-          icon: "error",
-          title: "Invalid rate",
-          text: "Rate must be a number between 0 and 100.",
+          icon: "success",
+          title: "Rate updated",
           confirmButtonColor: "#c20001",
         });
       } else {
-        if (editingRate) {
-          setRates((prev) =>
-            prev.map((r) =>
-              r.id === editingRate.id
-                ? {
-                    ...r,
-                    type: rateForm.type,
-                    employmentType: rateForm.employmentType,
-                    rate: rateVal,
-                    description: rateForm.description,
-                  }
-                : r
-            )
-          );
-          await Swal.fire({
-            icon: "success",
-            title: "Rate updated",
-            confirmButtonColor: "#c20001",
-          });
-        } else {
-          const newRate = {
-            id: `RATE${String(rates.length + 1).padStart(3, "0")}`,
-            type: rateForm.type,
-            employmentType: rateForm.employmentType,
-            rate: rateVal,
-            description: rateForm.description,
-          };
-          setRates((prev) => [...prev, newRate]);
-          await Swal.fire({
-            icon: "success",
-            title: "Rate created",
-            confirmButtonColor: "#c20001",
-          });
-        }
-        setIsRateModalOpen(false);
+        // CREATE
+        const payload = {
+          name:
+            rateForm.description ||
+            (rateForm.type === "Commission"
+              ? "Commission for freelancers"
+              : "Bonus for internal employees"),
+          type: backendType,
+          techType: backendTechType,
+          rate: rateDecimal,
+          isDefault: false,
+          description: rateForm.description,
+        };
+
+        const res = await RatesAPI.createRate(payload);
+        const created = mapBackendRateToUI(res.data.rate);
+
+        setRates((prev) => [...prev, created]);
+
+        await Swal.fire({
+          icon: "success",
+          title: "Rate created",
+          confirmButtonColor: "#c20001",
+        });
       }
+
+      setIsRateModalOpen(false);
+      loadSummary();
+    } catch (err) {
+      console.error("Save rate failed", err);
+      await Swal.fire({
+        icon: "error",
+        title: "Failed to save rate",
+        text:
+          err?.response?.data?.message ||
+          "Something went wrong while saving the rate.",
+        confirmButtonColor: "#c20001",
+      });
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -337,21 +461,82 @@ const AdminCommissionRatesPage = () => {
 
     if (!result.isConfirmed) return;
 
-    setRates((prev) => prev.filter((r) => r.id !== id));
-    await Swal.fire({
-      icon: "success",
-      title: "Rate deleted",
-      confirmButtonColor: "#c20001",
-    });
+    try {
+      await RatesAPI.deleteRate(id);
+      setRates((prev) => prev.filter((r) => r.id !== id));
+
+      await Swal.fire({
+        icon: "success",
+        title: "Rate deleted",
+        confirmButtonColor: "#c20001",
+      });
+
+      loadSummary();
+    } catch (err) {
+      console.error("Delete rate failed", err);
+      await Swal.fire({
+        icon: "error",
+        title: "Failed to delete rate",
+        text:
+          err?.response?.data?.message ||
+          "Something went wrong while deleting the rate.",
+        confirmButtonColor: "#c20001",
+      });
+    }
   };
 
-  const handleTypeChange = (type) => {
-    setRateForm((prev) => ({
-      ...prev,
-      type,
-      employmentType:
-        type === "Commission" ? "Freelancer" : "Internal Employee",
-    }));
+  const handleMakeDefault = async (rate) => {
+    if (rate.isDefault) return;
+
+    const result = await Swal.fire({
+      icon: "question",
+      title: "Set as default?",
+      text:
+        rate.type === "Commission"
+          ? "This will become the default commission rate for freelancers."
+          : "This will become the default bonus rate for internal employees.",
+      showCancelButton: true,
+      confirmButtonColor: "#16a34a",
+      cancelButtonColor: "#6b7280",
+      confirmButtonText: "Yes, set as default",
+    });
+
+    if (!result.isConfirmed) return;
+
+    try {
+      const res = await RatesAPI.setDefaultRate(rate.id);
+      const updated = mapBackendRateToUI(res.data.rate);
+
+      // একই category (Commission/Freelancer OR Bonus/Internal) এর মধ্যে একটাই default থাকবে
+      setRates((prev) =>
+        prev.map((r) => {
+          const sameCategory =
+            r.type === updated.type &&
+            r.employmentType === updated.employmentType;
+          if (!sameCategory) return r;
+          return { ...r, isDefault: r.id === updated.id };
+        })
+      );
+
+      await Swal.fire({
+        icon: "success",
+        title: "Default updated",
+        text: res.data.message || "Default rate updated successfully.",
+        confirmButtonColor: "#16a34a",
+      });
+
+      loadSummary();
+    } catch (err) {
+      console.error("Set default rate failed", err);
+      await Swal.fire({
+        icon: "error",
+        title: "Failed to set default",
+        text:
+          err?.response?.data?.message ||
+          "Something went wrong while setting the default rate.",
+        confirmButtonColor: "#c20001",
+      });
+    }
   };
 
   // -----------------------------------------------------
@@ -377,6 +562,11 @@ const AdminCommissionRatesPage = () => {
           <span className="mx-1 font-semibold">Administrators</span> should
           change live commission structures.
         </p>
+        {error && (
+          <p className="mt-2 text-xs text-red-500">
+            {error}
+          </p>
+        )}
       </div>
 
       {/* Stats Cards */}
@@ -387,7 +577,7 @@ const AdminCommissionRatesPage = () => {
             <div className="flex items-center gap-2">
               <BriefcaseBusiness className="w-5 h-5 text-purple-600" />
               <CardTitle className="text-3xl text-purple-600">
-                {commissionRates.length}
+                {stats.commissionCount || commissionRates.length}
               </CardTitle>
             </div>
           </CardHeader>
@@ -397,7 +587,7 @@ const AdminCommissionRatesPage = () => {
           <CardHeader className="pb-3">
             <CardDescription>Avg Commission</CardDescription>
             <CardTitle className="text-3xl text-purple-600">
-              {avgCommission}%
+              {avgCommission}
             </CardTitle>
           </CardHeader>
         </Card>
@@ -408,7 +598,7 @@ const AdminCommissionRatesPage = () => {
             <div className="flex items-center gap-2">
               <Users className="w-5 h-5 text-blue-600" />
               <CardTitle className="text-3xl text-blue-600">
-                {bonusRates.length}
+                {stats.bonusCount || bonusRates.length}
               </CardTitle>
             </div>
           </CardHeader>
@@ -418,7 +608,7 @@ const AdminCommissionRatesPage = () => {
           <CardHeader className="pb-3">
             <CardDescription>Avg Bonus</CardDescription>
             <CardTitle className="text-3xl text-blue-600">
-              {avgBonus}%
+              {avgBonus}
             </CardTitle>
           </CardHeader>
         </Card>
@@ -453,7 +643,11 @@ const AdminCommissionRatesPage = () => {
         </CardHeader>
         <CardContent>
           <div className="space-y-3">
-            {commissionRates.length === 0 ? (
+            {loading ? (
+              <div className="text-center py-8 text-gray-500 text-sm">
+                Loading commission rates...
+              </div>
+            ) : commissionRates.length === 0 ? (
               <div className="text-center py-8 text-gray-500">
                 <BriefcaseBusiness className="w-12 h-12 mx-auto mb-3 text-gray-300" />
                 <p>No commission rates configured yet.</p>
@@ -483,11 +677,24 @@ const AdminCommissionRatesPage = () => {
                         <Badge className="bg-gray-100 text-gray-800">
                           {rate.type}
                         </Badge>
+                        {rate.isDefault && (
+                          <Badge className="bg-emerald-100 text-emerald-800">
+                            <Star className="w-3 h-3 mr-1" />
+                            Default
+                          </Badge>
+                        )}
                       </div>
                       <p className="text-sm text-gray-700 mb-2">
                         {rate.description}
                       </p>
-                      <p className="text-xs text-gray-500">ID: {rate.id}</p>
+                      <p className="text-xs text-gray-500">
+                        Rate ID: {rate.rateId || rate.id}
+                      </p>
+                      {rate.isDefault && (
+                        <p className="text-[11px] text-emerald-700 mt-1">
+                          Default commission rate for freelancers.
+                        </p>
+                      )}
                     </div>
                     <div className="flex flex-col sm:flex-row gap-2">
                       <Button
@@ -498,6 +705,16 @@ const AdminCommissionRatesPage = () => {
                       >
                         <Pencil className="w-4 h-4 mr-1" />
                         Edit
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="border-emerald-300 text-emerald-700 hover:bg-emerald-50"
+                        onClick={() => handleMakeDefault(rate)}
+                        disabled={rate.isDefault}
+                      >
+                        <Star className="w-4 h-4 mr-1" />
+                        {rate.isDefault ? "Default" : "Set default"}
                       </Button>
                       <Button
                         size="sm"
@@ -546,7 +763,11 @@ const AdminCommissionRatesPage = () => {
         </CardHeader>
         <CardContent>
           <div className="space-y-3">
-            {bonusRates.length === 0 ? (
+            {loading ? (
+              <div className="text-center py-8 text-gray-500 text-sm">
+                Loading bonus rates...
+              </div>
+            ) : bonusRates.length === 0 ? (
               <div className="text-center py-8 text-gray-500">
                 <Users className="w-12 h-12 mx-auto mb-3 text-gray-300" />
                 <p>No bonus rates configured yet.</p>
@@ -576,11 +797,24 @@ const AdminCommissionRatesPage = () => {
                         <Badge className="bg-gray-100 text-gray-800">
                           {rate.type}
                         </Badge>
+                        {rate.isDefault && (
+                          <Badge className="bg-emerald-100 text-emerald-800">
+                            <Star className="w-3 h-3 mr-1" />
+                            Default
+                          </Badge>
+                        )}
                       </div>
                       <p className="text-sm text-gray-700 mb-2">
                         {rate.description}
                       </p>
-                      <p className="text-xs text-gray-500">ID: {rate.id}</p>
+                      <p className="text-xs text-gray-500">
+                        Rate ID: {rate.rateId || rate.id}
+                      </p>
+                      {rate.isDefault && (
+                        <p className="text-[11px] text-emerald-700 mt-1">
+                          Default bonus rate for internal employees.
+                        </p>
+                      )}
                     </div>
                     <div className="flex flex-col sm:flex-row gap-2">
                       <Button
@@ -591,6 +825,16 @@ const AdminCommissionRatesPage = () => {
                       >
                         <Pencil className="w-4 h-4 mr-1" />
                         Edit
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="border-emerald-300 text-emerald-700 hover:bg-emerald-50"
+                        onClick={() => handleMakeDefault(rate)}
+                        disabled={rate.isDefault}
+                      >
+                        <Star className="w-4 h-4 mr-1" />
+                        {rate.isDefault ? "Default" : "Set default"}
                       </Button>
                       <Button
                         size="sm"
@@ -628,24 +872,26 @@ const AdminCommissionRatesPage = () => {
             <div className="grid grid-cols-2 gap-2">
               <button
                 type="button"
+                disabled={!!editingRate}
                 onClick={() => handleTypeChange("Commission")}
                 className={`flex items-center justify-center gap-2 rounded-lg border px-3 py-2 text-xs font-medium ${
                   rateForm.type === "Commission"
                     ? "border-purple-500 bg-purple-50 text-purple-700"
                     : "border-gray-200 text-gray-700 hover:bg-gray-50"
-                }`}
+                } ${editingRate ? "opacity-60 cursor-not-allowed" : ""}`}
               >
                 <BriefcaseBusiness className="w-4 h-4" />
                 Commission (Freelancers)
               </button>
               <button
                 type="button"
+                disabled={!!editingRate}
                 onClick={() => handleTypeChange("Bonus")}
                 className={`flex items-center justify-center gap-2 rounded-lg border px-3 py-2 text-xs font-medium ${
                   rateForm.type === "Bonus"
                     ? "border-blue-500 bg-blue-50 text-blue-700"
                     : "border-gray-200 text-gray-700 hover:bg-gray-50"
-                }`}
+                } ${editingRate ? "opacity-60 cursor-not-allowed" : ""}`}
               >
                 <Users className="w-4 h-4" />
                 Bonus (Employees)
@@ -746,18 +992,24 @@ const AdminCommissionRatesPage = () => {
             <Button
               variant="outline"
               onClick={() => setIsRateModalOpen(false)}
+              disabled={saving}
             >
               Cancel
             </Button>
             <Button
               onClick={handleSaveRate}
+              disabled={saving}
               className={
                 rateForm.type === "Commission"
                   ? "bg-purple-600 hover:bg-purple-700"
                   : "bg-blue-600 hover:bg-blue-700"
               }
             >
-              {editingRate ? "Update rate" : "Create rate"}
+              {saving
+                ? "Saving..."
+                : editingRate
+                ? "Update rate"
+                : "Create rate"}
             </Button>
           </div>
         </div>
