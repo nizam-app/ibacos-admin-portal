@@ -33,17 +33,17 @@ const getStatusClasses = (status) => {
 
 // technician status chip (based on availability + locationStatus)
 const getTechStatusChip = (tech) => {
-  if (tech.availability === "BUSY") {
-    return {
-      label: "Busy",
-      classes: "bg-orange-50 text-orange-700 border-orange-100",
-      dot: "bg-orange-500",
-    };
-  }
+  // if (tech.availability === "BUSY") {
+  //   return {
+  //     label: "Busy",
+  //     classes: "bg-orange-50 text-orange-700 border-orange-100",
+  //     dot: "bg-orange-500",
+  //   };
+  // }
 
   if (tech.locationStatus === "ONLINE") {
     return {
-      label: "Active",
+      label: "Online",
       classes: "bg-green-50 text-green-700 border-green-100",
       dot: "bg-green-500",
     };
@@ -82,6 +82,8 @@ const DispatcherServiceRequests = () => {
   const [technicians, setTechnicians] = useState([]);
   const [technicianLoading, setTechnicianLoading] = useState(false);
   const [selectedTechnicianId, setSelectedTechnicianId] = useState(null);
+
+  console.log(technicians, "lala")
 
   // ------------------ data fetch ------------------
 
@@ -285,6 +287,22 @@ const DispatcherServiceRequests = () => {
     );
   }
 
+  const formatPreferredSchedule = (dateStr, timeStr) => {
+    if (!dateStr) return "—";
+
+    const d = new Date(dateStr);
+    // existing formatDate থাকলে সেটাও use করতে পারো:
+    // const datePart = formatDate(dateStr);
+    const datePart = d.toLocaleDateString("en-GB", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+    });
+
+    if (!timeStr) return datePart;
+    return `${datePart}, ${timeStr}`;
+  };
+
   return (
     <div className="space-y-6">
       {/* Page header */}
@@ -366,21 +384,23 @@ const DispatcherServiceRequests = () => {
         <div className="overflow-x-auto">
           <table className="min-w-full border-t border-gray-100 text-left text-sm">
             <thead className="bg-gray-50 text-xs font-medium uppercase text-gray-500">
-              <tr>
-                <th className="px-6 py-3">SR ID</th>
-                <th className="px-6 py-3">Customer</th>
-                <th className="px-6 py-3">Category</th>
-                <th className="px-6 py-3">Priority</th>
-                <th className="px-6 py-3">Status</th>
-                <th className="px-6 py-3">Date</th>
-                <th className="px-6 py-3 text-right">Actions</th>
-              </tr>
-            </thead>
+  <tr>
+    <th className="px-6 py-3">SR ID</th>
+    <th className="px-6 py-3">Customer</th>
+    <th className="px-6 py-3">Category</th>
+    <th className="px-6 py-3">Priority</th>
+    <th className="px-6 py-3">Status</th>
+    {/* ✅ New column */}
+    <th className="px-6 py-3">Created By</th>
+    <th className="px-6 py-3">Date</th>
+    <th className="px-6 py-3 text-right">Actions</th>
+  </tr>
+</thead>
             <tbody className="divide-y divide-gray-100 bg-white">
               {paginatedRequests.length === 0 ? (
                 <tr>
                   <td
-                    colSpan={7}
+                    colSpan={8}
                     className="px-6 py-6 text-center text-sm text-gray-500"
                   >
                     No service requests found.
@@ -421,6 +441,12 @@ const DispatcherServiceRequests = () => {
                         {sr.readableStatus || "N/A"}
                       </span>
                     </td>
+                    <td className="px-6 py-4 text-sm text-gray-900">
+      {sr.createdBy?.name || "N/A"}
+      <div className="text-xs text-gray-500">
+        {sr.createdBy?.role || ""}
+      </div>
+    </td>
                     <td className="px-6 py-4 text-sm text-gray-900">
                       {sr.createdAt
                         ? new Date(sr.createdAt).toISOString().slice(0, 10)
@@ -534,6 +560,13 @@ const DispatcherServiceRequests = () => {
                   <span className="font-medium">Priority:</span>{" "}
                   {selectedSr.priority || "N/A"}
                 </p>
+                <div>
+                    <div className=""><span className="font-medium">Preferred Schedule: </span> {formatPreferredSchedule(
+                        selectedSr.preferredDate,
+                        selectedSr.preferredTime
+                      )}</div>
+                    
+                  </div>
               </div>
 
               {/* Scheduling section */}

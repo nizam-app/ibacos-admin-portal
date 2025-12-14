@@ -30,6 +30,7 @@ import AdminAuditLogPage from "../pages/administrator/AdminAuditLogPage";
 import AdminUserManagementPage from "../pages/administrator/AdminUserManagementPage";
 import AdminCategoriesManagementPage from "../pages/administrator/AdminCategoriesManagementPage";
 import AdminCommissionRatesPage from "../pages/administrator/AdminCommissionRatesPage";
+import TechnicianOnlineMapView from "../pages/dispatcher/TechnicianOnlineMapView";
 
 const Router = createBrowserRouter([
   {
@@ -82,7 +83,7 @@ const Router = createBrowserRouter([
     path: "/technician-map", 
     element: (
       <ProtectedRoute allowedRoles={["DISPATCHER", "ADMIN"]}>
-        <TechnicianMapView />
+        <TechnicianOnlineMapView></TechnicianOnlineMapView>
       </ProtectedRoute>
     ),
   },

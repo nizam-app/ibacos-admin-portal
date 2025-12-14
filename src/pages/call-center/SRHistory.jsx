@@ -178,7 +178,7 @@ export default function SRHistoryPage() {
         console.error("Failed to load service requests", err);
         setLoadError(
           err.response?.data?.message ||
-            "Failed to load service requests. Please try again."
+          "Failed to load service requests. Please try again."
         );
       } finally {
         setLoading(false);
@@ -270,47 +270,63 @@ export default function SRHistoryPage() {
     !["RESOLVED", "COMPLETED", "CANCELLED"].includes(statusCodeForSelected);
 
   // ===== Cancel SR handler =====
- const handleCancelConfirm = async () => {
-  if (!selectedSR || !cancelReason.trim()) return;
+  const handleCancelConfirm = async () => {
+    if (!selectedSR || !cancelReason.trim()) return;
 
-  try {
-    setCancelLoading(true);
-    setCancelError("");
+    try {
+      setCancelLoading(true);
+      setCancelError("");
 
-    // ⬇️ এখানে PATCH + reason
-    const { data } = await axiosClient.patch(
-      `/sr/${selectedSR.id}/cancel`,
-      {
-        reason: cancelReason.trim(),
-      }
-    );
+      // ⬇️ এখানে PATCH + reason
+      const { data } = await axiosClient.patch(
+        `/sr/${selectedSR.id}/cancel`,
+        {
+          reason: cancelReason.trim(),
+        }
+      );
 
-    const updated = data?.serviceRequest || data;
+      const updated = data?.serviceRequest || data;
 
-    // list আপডেট
-    setServiceRequests((prev) =>
-      prev.map((sr) => (sr.id === updated.id ? { ...sr, ...updated } : sr))
-    );
+      // list আপডেট
+      setServiceRequests((prev) =>
+        prev.map((sr) => (sr.id === updated.id ? { ...sr, ...updated } : sr))
+      );
 
-    // modal এর selected SR আপডেট
-    setSelectedSR((prev) =>
-      prev && prev.id === updated.id ? { ...prev, ...updated } : prev
-    );
+      // modal এর selected SR আপডেট
+      setSelectedSR((prev) =>
+        prev && prev.id === updated.id ? { ...prev, ...updated } : prev
+      );
 
-    setShowCancelDialog(false);
-    setCancelReason("");
-    // চাইলে এখানে toast/alert দিতে পারো
-    // toast.success(data?.message || "Service Request cancelled successfully");
-  } catch (err) {
-    console.error("SR cancel failed", err);
-    setCancelError(
-      err.response?.data?.message ||
+      setShowCancelDialog(false);
+      setCancelReason("");
+      // চাইলে এখানে toast/alert দিতে পারো
+      // toast.success(data?.message || "Service Request cancelled successfully");
+    } catch (err) {
+      console.error("SR cancel failed", err);
+      setCancelError(
+        err.response?.data?.message ||
         "Failed to cancel service request. Please try again."
-    );
-  } finally {
-    setCancelLoading(false);
-  }
-};
+      );
+    } finally {
+      setCancelLoading(false);
+    }
+  };
+  const formatPreferredSchedule = (dateStr, timeStr) => {
+    if (!dateStr) return "—";
+
+    const d = new Date(dateStr);
+    // existing formatDate থাকলে সেটাও use করতে পারো:
+    // const datePart = formatDate(dateStr);
+    const datePart = d.toLocaleDateString("en-GB", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+    });
+
+    if (!timeStr) return datePart;
+    return `${datePart}, ${timeStr}`;
+  };
+
 
 
 
@@ -495,7 +511,7 @@ export default function SRHistoryPage() {
                           >
                             {sr.priority
                               ? sr.priority.charAt(0) +
-                                sr.priority.slice(1).toLowerCase()
+                              sr.priority.slice(1).toLowerCase()
                               : "—"}
                           </span>
                         </td>
@@ -553,11 +569,10 @@ export default function SRHistoryPage() {
                         key={pageNum}
                         type="button"
                         onClick={() => setCurrentPage(pageNum)}
-                        className={`h-8 w-8 rounded-md text-xs font-medium ${
-                          currentPage === pageNum
-                            ? "bg-[#c20001] text-white"
-                            : "border border-gray-300 bg-white text-gray-700 hover:bg-gray-50"
-                        }`}
+                        className={`h-8 w-8 rounded-md text-xs font-medium ${currentPage === pageNum
+                          ? "bg-[#c20001] text-white"
+                          : "border border-gray-300 bg-white text-gray-700 hover:bg-gray-50"
+                          }`}
                       >
                         {pageNum}
                       </button>
@@ -604,9 +619,8 @@ export default function SRHistoryPage() {
                   {selectedSR.srNumber || selectedSR.id}
                 </span>
                 <span
-                  className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
-                    getStatusInfo(selectedSR).classes
-                  }`}
+                  className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${getStatusInfo(selectedSR).classes
+                    }`}
                 >
                   {getStatusInfo(selectedSR).label}
                 </span>
@@ -710,7 +724,7 @@ export default function SRHistoryPage() {
                       >
                         {selectedSR.priority
                           ? selectedSR.priority.charAt(0) +
-                            selectedSR.priority.slice(1).toLowerCase()
+                          selectedSR.priority.slice(1).toLowerCase()
                           : "—"}
                       </span>
                     </div>
@@ -719,6 +733,21 @@ export default function SRHistoryPage() {
                     <div className="text-xs text-gray-500">Date Created</div>
                     <div className="mt-1">
                       {formatDate(selectedSR.createdAt)}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-gray-500">Preferred Schedule</div>
+                    <div className="mt-1">
+                      {formatPreferredSchedule(
+                        selectedSR.preferredDate,
+                        selectedSR.preferredTime
+                      )}
+                      {/* helper না থাকলে:
+      {selectedSR.preferredDate
+        ? `${formatDate(selectedSR.preferredDate)}${
+            selectedSR.preferredTime ? `, ${selectedSR.preferredTime}` : ""
+          }`
+        : "—"} */}  
                     </div>
                   </div>
                   <div className="col-span-2">
@@ -739,19 +768,17 @@ export default function SRHistoryPage() {
                   {statusTimeline.map((item, index) => (
                     <div key={item.status} className="flex items-center">
                       <span
-                        className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
-                          item.active
-                            ? "bg-[#c20001] text-white"
-                            : "bg-gray-200 text-gray-600"
-                        }`}
+                        className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${item.active
+                          ? "bg-[#c20001] text-white"
+                          : "bg-gray-200 text-gray-600"
+                          }`}
                       >
                         {item.status}
                       </span>
                       {index < statusTimeline.length - 1 && (
                         <div
-                          className={`mx-1 h-0.5 w-12 ${
-                            item.active ? "bg-[#c20001]" : "bg-gray-300"
-                          }`}
+                          className={`mx-1 h-0.5 w-12 ${item.active ? "bg-[#c20001]" : "bg-gray-300"
+                            }`}
                         />
                       )}
                     </div>

@@ -23,6 +23,7 @@ import LocationPickerMap from "../../components/map/LocationPickerMap";
 // 👉 Nouakchott default location
 const DEFAULT_LATITUDE = 18.0735;
 const DEFAULT_LONGITUDE = -15.9582;
+const MIN_LOOKUP_DIGITS = 8;
 
 function ServiceRequestForm() {
   const [formData, setFormData] = useState({
@@ -41,6 +42,8 @@ function ServiceRequestForm() {
     description: "",
     priority: "",
     attachments: [],
+    preferredDate: "",  
+    preferredTime: "",   
   });
 
   // ---- customer & state ----
@@ -90,7 +93,7 @@ function ServiceRequestForm() {
     loadCategories();
   }, []);
 
-    // category change → load services
+  // category change → load services
   useEffect(() => {
     if (!formData.categoryId) {
       setServices([]);
@@ -150,7 +153,8 @@ function ServiceRequestForm() {
     const raw = formData.phone;
     const normalized = normalizePhone(raw);
 
-    if (!normalized || normalized.length < 10) {
+    // ⬇️ এখন ৮ digit এর কম হলে search করবে না
+    if (!normalized || normalized.length < MIN_LOOKUP_DIGITS) {
       setFoundCustomer(null);
       setShowNewCustomerForm(false);
       setUseSavedAddress(true);
@@ -172,9 +176,8 @@ function ServiceRequestForm() {
         if (cancelled) return;
 
         if (data.exists && data.customer) {
+          // 🔴 customer পাওয়া গেছে → পুরনো logic একই থাকবে
           const c = data.customer;
-
-          // split homeAddress → street + city (optional)
           const homeAddress = c.homeAddress || "";
           const parts = homeAddress.split(",");
           const street = parts[0]?.trim() || "";
@@ -187,7 +190,7 @@ function ServiceRequestForm() {
 
           setFormData((prev) => ({
             ...prev,
-            customerName: c.name || "",
+            customerName: c.name || prev.customerName,
             address: street || prev.address,
             city: city || prev.city,
             latitude: c.latitude ?? prev.latitude,
@@ -195,7 +198,7 @@ function ServiceRequestForm() {
           }));
           setPinPlaced(true);
         } else {
-          // new customer
+          // 🟢 customer নাই → সাথে সাথেই New Customer form দেখাও
           setFoundCustomer(null);
           setShowNewCustomerForm(true);
           setUseSavedAddress(false);
@@ -220,6 +223,7 @@ function ServiceRequestForm() {
       cancelled = true;
     };
   }, [formData.phone]);
+
 
   // =========================
   //   MAP: use saved address
@@ -292,6 +296,8 @@ function ServiceRequestForm() {
       description: "",
       priority: "",
       attachments: [],
+      preferredDate: "",   // 👈
+    preferredTime: "",   // 👈
     });
     setFoundCustomer(null);
     setUseSavedAddress(true);
@@ -314,6 +320,10 @@ function ServiceRequestForm() {
       setGlobalError("Phone number is required.");
       return;
     }
+    if (!formData.preferredDate || !formData.preferredTime) {
+  setGlobalError("Please select preferred date and time.");
+  return;
+}
 
     if (
       !formData.categoryId ||
@@ -328,6 +338,7 @@ function ServiceRequestForm() {
       setGlobalError("Please select priority.");
       return;
     }
+
 
     setSubmitting(true);
 
@@ -358,8 +369,15 @@ function ServiceRequestForm() {
       }
 
       // ---------- 2) create SR ----------
+      const customerNameToSend =
+        foundCustomer?.name || formData.customerName || "New Customer";
+        const preferredDateIso = formData.preferredDate
+  ? new Date(formData.preferredDate).toISOString()
+  : null;
       const srPayload = {
         phone: customerPhone,
+        name: customerNameToSend,
+        email: formData.email || null,
         address: buildFullAddress(formData),
         latitude: formData.latitude,
         longitude: formData.longitude,
@@ -369,13 +387,14 @@ function ServiceRequestForm() {
         description: formData.description,
         paymentType: "CASH", // 👉 চাইলে UI থেকে নেবে
         priority: formData.priority.toUpperCase(), // LOW / MEDIUM / HIGH
+        preferredDate: preferredDateIso,
+  preferredTime: formData.preferredTime,
       };
 
       const { data: createdSR } = await axiosClient.post("/sr", srPayload);
 
       setSuccessMessage(
-        `Service Request ${
-          createdSR.srNumber || createdSR.id
+        `Service Request ${createdSR.srNumber || createdSR.id
         } created successfully.`
       );
       resetForm();
@@ -383,7 +402,7 @@ function ServiceRequestForm() {
       console.error("SR create failed", err);
       setGlobalError(
         err.response?.data?.message ||
-          "Failed to create Service Request. Please try again."
+        "Failed to create Service Request. Please try again."
       );
     } finally {
       setSubmitting(false);
@@ -610,14 +629,12 @@ function ServiceRequestForm() {
                   <button
                     type="button"
                     onClick={toggleUseSavedAddress}
-                    className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
-                      useSavedAddress ? "bg-[#c20001]" : "bg-gray-300"
-                    }`}
+                    className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${useSavedAddress ? "bg-[#c20001]" : "bg-gray-300"
+                      }`}
                   >
                     <span
-                      className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
-                        useSavedAddress ? "translate-x-4" : "translate-x-1"
-                      }`}
+                      className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${useSavedAddress ? "translate-x-4" : "translate-x-1"
+                        }`}
                     />
                   </button>
                 </div>
@@ -908,6 +925,59 @@ function ServiceRequestForm() {
                   </select>
                 </div>
               </div>
+              {/* row 3: preferred date + time */}
+<div className="grid gap-4 md:grid-cols-2">
+  <div className="space-y-1">
+    <label
+      htmlFor="preferredDate"
+      className="text-xs font-medium text-gray-700"
+    >
+      Preferred Date *
+    </label>
+    <input
+      id="preferredDate"
+      type="date"
+      className="w-full rounded-lg border border-gray-300 bg-gray-50 px-3 py-2 text-sm focus:outline-none focus:ring-[1px] focus:ring-[#ffb111] focus:border-[#ffb111]"
+      value={formData.preferredDate}
+      onChange={(e) =>
+        setFormData((prev) => ({
+          ...prev,
+          preferredDate: e.target.value,
+        }))
+      }
+      required
+    />
+  </div>
+
+  <div className="space-y-1">
+    <label
+      htmlFor="preferredTime"
+      className="text-xs font-medium text-gray-700"
+    >
+      Preferred Time *
+    </label>
+    <select
+      id="preferredTime"
+      className="w-full rounded-lg border border-gray-300 bg-gray-50 px-3 py-2 text-sm focus:outline-none focus:ring-[1px] focus:ring-[#ffb111] focus:border-[#ffb111]"
+      value={formData.preferredTime}
+      onChange={(e) =>
+        setFormData((prev) => ({
+          ...prev,
+          preferredTime: e.target.value,
+        }))
+      }
+      required
+    >
+      <option value="" disabled>
+        Select time
+      </option>
+      <option value="Morning">Morning</option>
+      <option value="Afternoon">Afternoon</option>
+      <option value="Evening">Evening</option>
+    </select>
+  </div>
+</div>
+
 
               <div className="space-y-1">
                 <label
