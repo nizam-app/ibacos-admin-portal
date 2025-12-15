@@ -215,9 +215,9 @@ function WorkOrderActionsModal({
                           </div>
                           <Badge
                             className={`${
-                              tech.status === "Available"
-                                ? "bg-green-100 text-green-800"
-                                : "bg-orange-100 text-orange-800"
+                              tech.status === "ONLINE"
+                              ? "bg-orange-100 text-orange-800"
+                                : "bg-green-100 text-green-800"
                             }`}
                           >
                             {tech.status}

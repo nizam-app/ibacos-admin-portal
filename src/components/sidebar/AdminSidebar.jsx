@@ -13,6 +13,7 @@ import {
   Layers,
   Percent,
   LogOut,
+  Users2,
 } from "lucide-react";
 import Swal from "sweetalert2";
 import { logoutApi } from "../../api/authApi";
@@ -138,6 +139,10 @@ const AdminSidebar = () => {
         <NavLink to="/admin/commission-bonus" className={getLinkClasses}>
           <Percent className="h-4 w-4" />
           <span>Commission &amp; Bonus</span>
+        </NavLink>
+        <NavLink to="/admin/customer-management" className={getLinkClasses}>
+          <Users2 className="h-4 w-4" />
+          <span>Customers Management</span>
         </NavLink>
       </div>
 

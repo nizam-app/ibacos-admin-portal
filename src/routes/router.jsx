@@ -31,6 +31,7 @@ import AdminUserManagementPage from "../pages/administrator/AdminUserManagementP
 import AdminCategoriesManagementPage from "../pages/administrator/AdminCategoriesManagementPage";
 import AdminCommissionRatesPage from "../pages/administrator/AdminCommissionRatesPage";
 import TechnicianOnlineMapView from "../pages/dispatcher/TechnicianOnlineMapView";
+import AdminCustomerManagement from "../pages/administrator/AdminCustomerManagement";
 
 const Router = createBrowserRouter([
   {
@@ -108,6 +109,7 @@ const Router = createBrowserRouter([
       { path: "user-management", element: <AdminUserManagementPage/> },
       { path: "categories-services", element: <AdminCategoriesManagementPage/> },
       { path: "commission-bonus", element: <AdminCommissionRatesPage/> },
+      { path: "customer-management", element: <AdminCustomerManagement/> },
     ],
   },
 ]);

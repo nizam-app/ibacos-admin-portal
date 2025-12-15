@@ -93,7 +93,8 @@ const mapNearbyTech = (t) => ({
     typeof t.rates?.bonusRate === "number" ? t.rates.bonusRate * 100 : 5,
   distance: t.distance,
   distanceKm: t.distanceKm,
-  status: t.availability === "AVAILABLE" ? "Available" : "Busy",
+  // status: t.availability === "AVAILABLE" ? "Available" : "Busy",
+  status: t.locationStatus === "ONLINE" ? "Online" : "Offline",
   openJobs: t.openJobs || [],
 });
 
@@ -348,7 +349,7 @@ export default function DispatcherWorkOrders() {
       const res = await DispatcherAPI.getNearbyTechnicians({
         latitude: lat,
         longitude: lng,
-        maxDistance: 50,
+        maxDistance: 500,
         status: "ONLINE",
       });
 
@@ -473,20 +474,30 @@ export default function DispatcherWorkOrders() {
   };
 
   const filteredWorkOrders = useMemo(() => {
-    let list = [...workOrders];
+  let list = [...workOrders];
 
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase();
-      list = list.filter(
-        (wo) =>
-          (wo.woNumber && wo.woNumber.toLowerCase().includes(q)) ||
-          String(wo.id).includes(q) ||
-          wo.customerName.toLowerCase().includes(q)
-      );
-    }
+  if (searchQuery.trim()) {
+    const q = searchQuery.toLowerCase();
+    list = list.filter((wo) => {
+      const woNumberMatch =
+        wo.woNumber && wo.woNumber.toLowerCase().includes(q);
 
-    return list;
-  }, [workOrders, searchQuery]);
+      const internalIdMatch = String(wo.id).toLowerCase().includes(q);
+
+      // 🔹 এখানেই SR ID দিয়ে search করার logic
+      const srIdMatch =
+        wo.srId && String(wo.srId).toLowerCase().includes(q);
+
+      const customerMatch =
+        wo.customerName && wo.customerName.toLowerCase().includes(q);
+
+      return woNumberMatch || internalIdMatch || srIdMatch || customerMatch;
+    });
+  }
+
+  return list;
+}, [workOrders, searchQuery]);
+
 
   const countByStatus = (statusKey) => {
     switch (statusKey) {
@@ -1026,7 +1037,7 @@ export default function DispatcherWorkOrders() {
             <div className="relative">
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
               <input
-                placeholder="Search by WO number or Customer…"
+                placeholder="Search by WO number, SR ID or Customer…"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="w-full rounded-lg border border-gray-300 bg-white py-2 pl-10 pr-3 text-sm text-gray-900 shadow-sm focus:outline-none focus:ring-[1px] focus:ring-[#ffb111]"

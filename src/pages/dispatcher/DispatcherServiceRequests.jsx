@@ -18,6 +18,7 @@ const getPriorityClasses = (priority) => {
   }
 };
 
+
 // status badge colour
 const getStatusClasses = (status) => {
   if (!status) return "bg-gray-50 text-gray-600 border-gray-100";
@@ -239,6 +240,15 @@ const DispatcherServiceRequests = () => {
       );
       return;
     }
+    if (!selectedTechnicianId) {
+      Swal.fire(
+        "Validation",
+        "Please select a technician before converting to a work order.",
+        "warning"
+      );
+      return;
+    }
+
 
     try {
       const isoDate = new Date(scheduledAt).toISOString();
@@ -247,11 +257,10 @@ const DispatcherServiceRequests = () => {
         scheduledAt: isoDate,
         estimatedDuration: Number(estimatedDuration),
         notes: notes || "",
+        technicianId: selectedTechnicianId,
       };
 
-      if (selectedTechnicianId) {
-        payload.technicianId = selectedTechnicianId;
-      }
+
 
       const res = await axiosClient.post(
         `/wos/from-sr/${selectedSr.id}`,
@@ -384,18 +393,19 @@ const DispatcherServiceRequests = () => {
         <div className="overflow-x-auto">
           <table className="min-w-full border-t border-gray-100 text-left text-sm">
             <thead className="bg-gray-50 text-xs font-medium uppercase text-gray-500">
-  <tr>
-    <th className="px-6 py-3">SR ID</th>
-    <th className="px-6 py-3">Customer</th>
-    <th className="px-6 py-3">Category</th>
-    <th className="px-6 py-3">Priority</th>
-    <th className="px-6 py-3">Status</th>
-    {/* ✅ New column */}
-    <th className="px-6 py-3">Created By</th>
-    <th className="px-6 py-3">Date</th>
-    <th className="px-6 py-3 text-right">Actions</th>
-  </tr>
-</thead>
+              <tr>
+                <th className="px-6 py-3">SR ID</th>
+                <th className="px-6 py-3">Customer</th>
+                <th className="px-6 py-3">Category</th>
+                <th className="px-6 py-3">Price</th>
+                <th className="px-6 py-3">Priority</th>
+                <th className="px-6 py-3">Status</th>
+                {/* ✅ New column */}
+                <th className="px-6 py-3">Created By</th>
+                <th className="px-6 py-3">Date</th>
+                <th className="px-6 py-3 text-right">Actions</th>
+              </tr>
+            </thead>
             <tbody className="divide-y divide-gray-100 bg-white">
               {paginatedRequests.length === 0 ? (
                 <tr>
@@ -421,6 +431,10 @@ const DispatcherServiceRequests = () => {
                     <td className="px-6 py-4 text-sm text-gray-900">
                       {sr.category?.name || "N/A"}
                     </td>
+                    <td className="px-6 py-4 text-sm text-gray-900">
+                      {/* {getBasePrice(sr)} */}
+                      {sr.subservice?.baseRate != null ? `$${sr.subservice.baseRate}` : "N/A" }
+                    </td>
                     <td className="px-6 py-4">
                       <span
                         className={
@@ -442,11 +456,11 @@ const DispatcherServiceRequests = () => {
                       </span>
                     </td>
                     <td className="px-6 py-4 text-sm text-gray-900">
-      {sr.createdBy?.name || "N/A"}
-      <div className="text-xs text-gray-500">
-        {sr.createdBy?.role || ""}
-      </div>
-    </td>
+                      {sr.createdBy?.name || "N/A"}
+                      <div className="text-xs text-gray-500">
+                        {sr.createdBy?.role || ""}
+                      </div>
+                    </td>
                     <td className="px-6 py-4 text-sm text-gray-900">
                       {sr.createdAt
                         ? new Date(sr.createdAt).toISOString().slice(0, 10)
@@ -492,11 +506,10 @@ const DispatcherServiceRequests = () => {
                 <button
                   key={p}
                   onClick={() => setPage(p)}
-                  className={`min-w-[32px] rounded-md border px-2 py-1 ${
-                    p === currentPage
-                      ? "border-[#c20001] bg-[#c20001] text-white"
-                      : "border-gray-200 bg-white text-gray-700"
-                  }`}
+                  className={`min-w-[32px] rounded-md border px-2 py-1 ${p === currentPage
+                    ? "border-[#c20001] bg-[#c20001] text-white"
+                    : "border-gray-200 bg-white text-gray-700"
+                    }`}
                 >
                   {p}
                 </button>
@@ -561,12 +574,12 @@ const DispatcherServiceRequests = () => {
                   {selectedSr.priority || "N/A"}
                 </p>
                 <div>
-                    <div className=""><span className="font-medium">Preferred Schedule: </span> {formatPreferredSchedule(
-                        selectedSr.preferredDate,
-                        selectedSr.preferredTime
-                      )}</div>
-                    
-                  </div>
+                  <div className=""><span className="font-medium">Preferred Schedule: </span> {formatPreferredSchedule(
+                    selectedSr.preferredDate,
+                    selectedSr.preferredTime
+                  )}</div>
+
+                </div>
               </div>
 
               {/* Scheduling section */}
@@ -612,7 +625,7 @@ const DispatcherServiceRequests = () => {
                     Technician Assignment
                   </h3>
                   <p className="text-xs text-gray-500">
-                    Assign now or leave unassigned (optional)
+                    Assign a technician (required)
                   </p>
                 </div>
 
@@ -649,9 +662,8 @@ const DispatcherServiceRequests = () => {
                                 tech.id === selectedTechnicianId ? null : tech.id
                               )
                             }
-                            className={`flex w-full items-start justify-between px-4 py-3 text-left text-xs transition ${
-                              isSelected ? "bg-[#fff5f5]" : "hover:bg-gray-50"
-                            }`}
+                            className={`flex w-full items-start justify-between px-4 py-3 text-left text-xs transition ${isSelected ? "bg-[#fff5f5]" : "hover:bg-gray-50"
+                              }`}
                           >
                             <div>
                               <p className="text-sm font-medium text-gray-900">
@@ -703,22 +715,9 @@ const DispatcherServiceRequests = () => {
                     )}
                   </div>
 
-                  {/* assign later */}
-                  <button
-                    type="button"
-                    onClick={() => setSelectedTechnicianId(null)}
-                    className="flex w-full items-center justify-between px-4 py-2 text-xs text-gray-600 hover:bg-gray-50"
-                  >
-                    <span>Assign later (leave unassigned)</span>
-                    {!selectedTechnicianId && (
-                      <span className="text-[11px] font-medium text-[#c20001]">
-                        Selected
-                      </span>
-                    )}
-                  </button>
+
                 </div>
               </div>
-
               {/* notes */}
               <div className="space-y-2">
                 <label className="text-xs font-medium text-gray-700">
