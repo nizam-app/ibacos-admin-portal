@@ -84,6 +84,7 @@ const Router = createBrowserRouter([
     element: (
       <ProtectedRoute allowedRoles={["DISPATCHER", "ADMIN"]}>
         <TechnicianOnlineMapView></TechnicianOnlineMapView>
+        {/* <TechnicianMapView></TechnicianMapView> */}
       </ProtectedRoute>
     ),
   },

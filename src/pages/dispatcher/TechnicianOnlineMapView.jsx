@@ -141,7 +141,6 @@ const TechnicianMapViewNearby = () => {
         });
       }
 
-      // শুধু ONLINE locationStatus এর technician use করব
       const mapped = technicians
         .filter((t) => t.locationStatus === "ONLINE")
         .map((t) => {
