@@ -241,6 +241,9 @@ export default function DispatcherWorkOrders() {
       estimatedDuration: String(estimatedHours || "2"),
       priority: priorityLabel,
       notes: wo.notes || "",
+      price: typeof wo.subservice?.baseRate === "number"
+        ? wo.subservice.baseRate
+        : null,
 
       paymentRecord: null, // placeholder – future use
 
@@ -473,30 +476,69 @@ export default function DispatcherWorkOrders() {
     }
   };
 
+  const getStatusDisplay = (statusRaw) => {
+    switch (statusRaw) {
+      case "UNASSIGNED":
+        return "Pending";
+      case "ASSIGNED":
+        return "Assigned";
+      case "IN_PROGRESS":
+        return "In Progress";
+      case "COMPLETED":
+        return "Completed";
+      case "COMPLETED_PENDING_PAYMENT":
+        return "Completed – Pending Payment";
+      case "CANCELLED":
+        return "Cancelled";
+      default:
+        return (statusRaw || "Unknown").replace(/_/g, " ");
+    }
+  };
+
+  const getStatusBadgeClass = (statusRaw) => {
+    switch (statusRaw) {
+      case "UNASSIGNED":
+        return "bg-amber-50 text-amber-700 border border-amber-200";
+      case "ASSIGNED":
+        return "bg-blue-50 text-blue-700 border border-blue-200";
+      case "IN_PROGRESS":
+        return "bg-indigo-50 text-indigo-700 border border-indigo-200";
+      case "COMPLETED":
+        return "bg-emerald-50 text-emerald-700 border border-emerald-200";
+      case "COMPLETED_PENDING_PAYMENT":
+        return "bg-yellow-50 text-yellow-800 border border-yellow-200";
+      case "CANCELLED":
+        return "bg-red-50 text-red-700 border border-red-200";
+      default:
+        return "bg-gray-50 text-gray-700 border border-gray-200";
+    }
+  };
+
+
   const filteredWorkOrders = useMemo(() => {
-  let list = [...workOrders];
+    let list = [...workOrders];
 
-  if (searchQuery.trim()) {
-    const q = searchQuery.toLowerCase();
-    list = list.filter((wo) => {
-      const woNumberMatch =
-        wo.woNumber && wo.woNumber.toLowerCase().includes(q);
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      list = list.filter((wo) => {
+        const woNumberMatch =
+          wo.woNumber && wo.woNumber.toLowerCase().includes(q);
 
-      const internalIdMatch = String(wo.id).toLowerCase().includes(q);
+        const internalIdMatch = String(wo.id).toLowerCase().includes(q);
 
-      // 🔹 এখানেই SR ID দিয়ে search করার logic
-      const srIdMatch =
-        wo.srId && String(wo.srId).toLowerCase().includes(q);
+        // 🔹 এখানেই SR ID দিয়ে search করার logic
+        const srIdMatch =
+          wo.srId && String(wo.srId).toLowerCase().includes(q);
 
-      const customerMatch =
-        wo.customerName && wo.customerName.toLowerCase().includes(q);
+        const customerMatch =
+          wo.customerName && wo.customerName.toLowerCase().includes(q);
 
-      return woNumberMatch || internalIdMatch || srIdMatch || customerMatch;
-    });
-  }
+        return woNumberMatch || internalIdMatch || srIdMatch || customerMatch;
+      });
+    }
 
-  return list;
-}, [workOrders, searchQuery]);
+    return list;
+  }, [workOrders, searchQuery]);
 
 
   const countByStatus = (statusKey) => {
@@ -685,7 +727,21 @@ export default function DispatcherWorkOrders() {
                     {wo.woNumber || `WO-${wo.id}`}
                   </h3>
                   <p className="text-xs text-gray-600">SR: {wo.srId}</p>
+
+                  {/* 🔹 Styled status badge */}
+                  <div className="mt-1 flex items-center gap-2 text-[11px]">
+                    <span className="text-gray-500">Status</span>
+                    <span
+                      className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 font-medium ${getStatusBadgeClass(
+                        wo.statusRaw || wo.status
+                      )}`}
+                    >
+                      <span className="h-1.5 w-1.5 rounded-full bg-current" />
+                      {getStatusDisplay(wo.statusRaw || wo.status)}
+                    </span>
+                  </div>
                 </div>
+
                 <Badge className={getPriorityColor(wo.priority)}>
                   {wo.priority} Priority
                 </Badge>
@@ -728,6 +784,12 @@ export default function DispatcherWorkOrders() {
                   <Clock className="h-4 w-4" />
                   <span>{wo.estimatedDuration}h duration</span>
                 </div>
+                {typeof wo.price === "number" && (
+                  <div className="flex items-center gap-1">
+                    {/* <DollarSign className="h-4 w-4" /> */}
+                    <span>${wo.price}</span>
+                  </div>
+                )}
               </div>
 
               {/* Notes */}
@@ -1061,8 +1123,8 @@ export default function DispatcherWorkOrders() {
                   type="button"
                   onClick={() => setActiveTab(tab.key)}
                   className={`inline-flex items-center justify-center rounded-md px-2 py-1 text-xs transition ${activeTab === tab.key
-                      ? "bg-white text-[#c20001] shadow-sm"
-                      : "bg-transparent text-gray-700 hover:bg-white"
+                    ? "bg-white text-[#c20001] shadow-sm"
+                    : "bg-transparent text-gray-700 hover:bg-white"
                     }`}
                 >
                   {tab.label} ({countByStatus(tab.key)})

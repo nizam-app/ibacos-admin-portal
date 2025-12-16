@@ -42,8 +42,8 @@ function ServiceRequestForm() {
     description: "",
     priority: "",
     attachments: [],
-    preferredDate: "",  
-    preferredTime: "",   
+    preferredDate: "",
+    preferredTime: "",
   });
 
   // ---- customer & state ----
@@ -297,7 +297,7 @@ function ServiceRequestForm() {
       priority: "",
       attachments: [],
       preferredDate: "",   // 👈
-    preferredTime: "",   // 👈
+      preferredTime: "",   // 👈
     });
     setFoundCustomer(null);
     setUseSavedAddress(true);
@@ -321,9 +321,9 @@ function ServiceRequestForm() {
       return;
     }
     if (!formData.preferredDate || !formData.preferredTime) {
-  setGlobalError("Please select preferred date and time.");
-  return;
-}
+      setGlobalError("Please select preferred date and time.");
+      return;
+    }
 
     if (
       !formData.categoryId ||
@@ -371,9 +371,9 @@ function ServiceRequestForm() {
       // ---------- 2) create SR ----------
       const customerNameToSend =
         foundCustomer?.name || formData.customerName || "New Customer";
-        const preferredDateIso = formData.preferredDate
-  ? new Date(formData.preferredDate).toISOString()
-  : null;
+      const preferredDateIso = formData.preferredDate
+        ? new Date(formData.preferredDate).toISOString()
+        : null;
       const srPayload = {
         phone: customerPhone,
         name: customerNameToSend,
@@ -388,7 +388,7 @@ function ServiceRequestForm() {
         paymentType: "CASH", // 👉 চাইলে UI থেকে নেবে
         priority: formData.priority.toUpperCase(), // LOW / MEDIUM / HIGH
         preferredDate: preferredDateIso,
-  preferredTime: formData.preferredTime,
+        preferredTime: formData.preferredTime,
       };
 
       const { data: createdSR } = await axiosClient.post("/sr", srPayload);
@@ -408,6 +408,10 @@ function ServiceRequestForm() {
       setSubmitting(false);
     }
   };
+  const selectedSubservice = subservices.find(
+    (s) => String(s.id) === String(formData.subserviceId)
+  );
+
 
   // =========================
   //   RENDER
@@ -894,7 +898,18 @@ function ServiceRequestForm() {
                       </option>
                     ))}
                   </select>
+
+                  {/* 🔹 এখানে base price দেখাচ্ছি */}
+                  {selectedSubservice && (
+                    <p className="text-xs text-gray-600 mt-1">
+                      Base price:{" "}
+                      <span className="font-semibold text-gray-900">
+                        ${selectedSubservice.baseRate} 
+                      </span>
+                    </p>
+                  )}
                 </div>
+
 
                 {/* priority select – আগের মতোই */}
                 <div className="space-y-1">
@@ -926,57 +941,57 @@ function ServiceRequestForm() {
                 </div>
               </div>
               {/* row 3: preferred date + time */}
-<div className="grid gap-4 md:grid-cols-2">
-  <div className="space-y-1">
-    <label
-      htmlFor="preferredDate"
-      className="text-xs font-medium text-gray-700"
-    >
-      Preferred Date *
-    </label>
-    <input
-      id="preferredDate"
-      type="date"
-      className="w-full rounded-lg border border-gray-300 bg-gray-50 px-3 py-2 text-sm focus:outline-none focus:ring-[1px] focus:ring-[#ffb111] focus:border-[#ffb111]"
-      value={formData.preferredDate}
-      onChange={(e) =>
-        setFormData((prev) => ({
-          ...prev,
-          preferredDate: e.target.value,
-        }))
-      }
-      required
-    />
-  </div>
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="space-y-1">
+                  <label
+                    htmlFor="preferredDate"
+                    className="text-xs font-medium text-gray-700"
+                  >
+                    Preferred Date *
+                  </label>
+                  <input
+                    id="preferredDate"
+                    type="date"
+                    className="w-full rounded-lg border border-gray-300 bg-gray-50 px-3 py-2 text-sm focus:outline-none focus:ring-[1px] focus:ring-[#ffb111] focus:border-[#ffb111]"
+                    value={formData.preferredDate}
+                    onChange={(e) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        preferredDate: e.target.value,
+                      }))
+                    }
+                    required
+                  />
+                </div>
 
-  <div className="space-y-1">
-    <label
-      htmlFor="preferredTime"
-      className="text-xs font-medium text-gray-700"
-    >
-      Preferred Time *
-    </label>
-    <select
-      id="preferredTime"
-      className="w-full rounded-lg border border-gray-300 bg-gray-50 px-3 py-2 text-sm focus:outline-none focus:ring-[1px] focus:ring-[#ffb111] focus:border-[#ffb111]"
-      value={formData.preferredTime}
-      onChange={(e) =>
-        setFormData((prev) => ({
-          ...prev,
-          preferredTime: e.target.value,
-        }))
-      }
-      required
-    >
-      <option value="" disabled>
-        Select time
-      </option>
-      <option value="Morning">Morning</option>
-      <option value="Afternoon">Afternoon</option>
-      <option value="Evening">Evening</option>
-    </select>
-  </div>
-</div>
+                <div className="space-y-1">
+                  <label
+                    htmlFor="preferredTime"
+                    className="text-xs font-medium text-gray-700"
+                  >
+                    Preferred Time *
+                  </label>
+                  <select
+                    id="preferredTime"
+                    className="w-full rounded-lg border border-gray-300 bg-gray-50 px-3 py-2 text-sm focus:outline-none focus:ring-[1px] focus:ring-[#ffb111] focus:border-[#ffb111]"
+                    value={formData.preferredTime}
+                    onChange={(e) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        preferredTime: e.target.value,
+                      }))
+                    }
+                    required
+                  >
+                    <option value="" disabled>
+                      Select time
+                    </option>
+                    <option value="Morning">Morning</option>
+                    <option value="Afternoon">Afternoon</option>
+                    <option value="Evening">Evening</option>
+                  </select>
+                </div>
+              </div>
 
 
               <div className="space-y-1">
