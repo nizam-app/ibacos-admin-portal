@@ -353,10 +353,12 @@ function ServiceRequestForm() {
         const customerPayload = {
           name: formData.customerName || "New Customer",
           phone: normalizedPhone,
+          email: formData.email || null,
           password: "customer123", // TODO: দরকার মতো change করো
           homeAddress: buildFullAddress(formData),
           latitude: formData.latitude,
           longitude: formData.longitude,
+          registrationSource: "CALL_CENTER"
         };
 
         const { data: newCustomer } = await axiosClient.post(

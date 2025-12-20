@@ -413,30 +413,38 @@ const AdminPayoutManagement = () => {
         setSummary(summaryRes.data || null);
 
         // 2) pending commissions table mapping
-        const pendingMapped = (pendingRes.data || []).map((item) => ({
-          id: item.id,
-          workOrderId:
-            item.workOrderId ||
-            item.workOrderNumber ||
-            `WO-${item.id}`,
-          technicianName:
-            item.technician ||
-            item.technicianName ||
-            (item.technicianId ? `Technician #${item.technicianId}` : "—"),
-          employmentType: item.employmentType || item.type || "",
-          type:
-            item.type === "BONUS" || item.componentType === "BONUS"
-              ? "Bonus"
-              : "Commission",
-          serviceCategory: item.serviceCategory || item.serviceName || "—",
-          paymentAmount: item.paymentAmount ?? item.grossAmount ?? 0,
-          rate: item.rate ?? item.commissionRate ?? 0,
-          amount: item.amount ?? item.netAmount ?? 0,
-          paymentDate: item.paymentDate
-            ? new Date(item.paymentDate).toLocaleDateString("en-US")
-            : "",
-        }));
-        setPendingCommissions(pendingMapped);
+        const pendingSource = Array.isArray(pendingRes.data)
+        ? pendingRes.data
+        : [];
+
+      const pendingMapped = pendingSource.map((item) => ({
+        id: item.id,
+        workOrderId: item.workOrder,              // e.g. "WO-1764925962143"
+        technicianName: item.technician,         // "Adama Ba"
+        technicianId: item.technicianId,         // 5
+        employmentType: "",                      // future: FREELANCER / INTERNAL, ekhane empty rakhlam
+
+        // COMMISSION / BONUS → UI text
+        type: item.type === "BONUS" ? "Bonus" : "Commission",
+
+        serviceCategory: item.service,           // "AC Filter Cleaning"
+        paymentAmount: item.payment ?? 0,        // 2000
+
+        // backend rate = 0.12 → UI te 12 dekhabo, karon niche table e tumi `{c.rate}%` use korcho
+        rate: item.rate != null ? item.rate * 100 : 0,
+
+        amount: item.amount ?? 0,                // 240
+
+        paymentDate: item.date
+          ? new Date(item.date).toLocaleDateString("en-US", {
+              year: "numeric",
+              month: "short",
+              day: "numeric",
+            })
+          : "",
+      }));
+
+      setPendingCommissions(pendingMapped);
 
         // 3) payout batches mapping
         const batchesMapped = (batchesRes.data || []).map((item) => ({
@@ -499,6 +507,7 @@ const AdminPayoutManagement = () => {
 
     loadPayoutDashboard();
   }, []);
+  
 
 
 
@@ -907,9 +916,8 @@ const AdminPayoutManagement = () => {
               <div>
                 <CardTitle>Pending Commissions &amp; Bonuses</CardTitle>
                 <CardDescription>
-                  Verified payments ready for weekly payout (API integration
-                  coming soon)
-                </CardDescription>
+  Verified payments ready for weekly payout based on completed jobs
+</CardDescription>
               </div>
               <Button onClick={() => setIsCreateBatchOpen(true)}>
                 <Plus className="h-4 w-4 mr-1.5" />
@@ -996,7 +1004,7 @@ const AdminPayoutManagement = () => {
                           colSpan={8}
                           className="px-4 py-8 text-center text-gray-500"
                         >
-                          No pending commissions found (waiting for backend API)
+                          No pending commissions found 
                         </td>
                       </tr>
                     ) : (
@@ -1185,15 +1193,13 @@ const AdminPayoutManagement = () => {
           <CardHeader>
             <CardTitle>Payout Batches</CardTitle>
             <CardDescription>
-              Weekly payout batches scheduled for every Monday (API integration
-              coming soon)
+              Weekly payout batches scheduled for every Monday 
             </CardDescription>
           </CardHeader>
           <CardContent>
             {!payoutBatches.length ? (
               <div className="py-8 text-center text-gray-500 text-sm">
-                No payout batches available yet. This section will be activated
-                once batch APIs are implemented.
+                No payout batches available yet.
               </div>
             ) : (
               <div className="space-y-4">
@@ -1302,8 +1308,7 @@ const AdminPayoutManagement = () => {
               <div>
                 <CardTitle>Payout History</CardTitle>
                 <CardDescription>
-                  Complete audit trail of all processed payouts (API integration
-                  coming soon)
+                  Complete audit trail of all processed payouts
                 </CardDescription>
               </div>
               <Button size="sm" variant="outline" disabled>
@@ -1433,8 +1438,7 @@ const AdminPayoutManagement = () => {
           <div className="flex items-start gap-2">
             <AlertCircle className="h-4 w-4 mt-0.5" />
             <p>
-              Batch APIs are not yet available. This flow will be connected to
-              the backend once implemented.
+              This batch will be created on the server and included in the next weekly payout run.
             </p>
           </div>
         </div>

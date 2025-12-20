@@ -643,7 +643,6 @@ const AdminUserManagementPage = () => {
           </div>
         </CardContent>
       </Card>
-
       {/* Users list */}
       <Card>
         <CardHeader>
