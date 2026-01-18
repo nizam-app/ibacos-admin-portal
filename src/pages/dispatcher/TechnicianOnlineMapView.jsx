@@ -2,7 +2,8 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import axiosClient from "../../api/axiosClient";
-import { GoogleMap, MarkerF, useJsApiLoader } from "@react-google-maps/api";
+import { GoogleMap, MarkerF, useJsApiLoader, Autocomplete } from "@react-google-maps/api";
+
 
 // ---------------------------------------------------------------------
 // Small inline icons
@@ -86,6 +87,28 @@ function normalizeSpecialization(raw) {
 }
 
 const TechnicianMapViewNearby = () => {
+
+
+  const [auto, setAuto] = useState(null);
+
+  const onAutoLoad = (a) => setAuto(a);
+
+  const onPlaceChanged = () => {
+    if (!auto) return;
+    const place = auto.getPlace();
+    const loc = place?.geometry?.location;
+    if (!loc) {
+      setError("Select a suggestion from the dropdown.");
+      return;
+    }
+    const newCenter = { lat: loc.lat(), lng: loc.lng() };
+    setCenter(newCenter);
+    fetchNearbyTechnicians(newCenter.lat, newCenter.lng, radius);
+  };
+
+
+
+
   const navigate = useNavigate();
 
   // buyer/job location (map center)
@@ -107,64 +130,67 @@ const TechnicianMapViewNearby = () => {
 
   const { isLoaded, loadError } = useJsApiLoader({
     googleMapsApiKey: import.meta.env.VITE_GOOGLE_MAPS_API_KEY,
+    libraries: ["places"],
   });
 
   // -------------------------------------------------------------------
   // API: /api/dispatcher/technicians/nearby?latitude=&longitude=
   // -------------------------------------------------------------------
-  const fetchNearbyTechnicians = async (lat, lng) => {
+  const fetchNearbyTechnicians = async (lat, lng, radiusMeters = radius) => {
     try {
       setLoading(true);
       setError("");
 
-      const { data } = await axiosClient.get(
-        "/dispatcher/technicians/nearby",
-        {
-          params: {
-            latitude: lat,
-            longitude: lng,
-            // radius এখান থেকে চাইলে backend ignore করলেও কোনো সমস্যা নেই
-            // radius,
-          },
-        }
-      );
+      const maxDistanceKm = Math.max(1, Math.round(radiusMeters / 1000)); // meters -> km
 
-      const technicians = Array.isArray(data.technicians)
-        ? data.technicians
-        : [];
+      const { data } = await axiosClient.get("/dispatcher/technicians/nearby", {
+        params: {
+          latitude: lat,
+          longitude: lng,
+          maxDistance: maxDistanceKm,
+          // status: "ONLINE", // ✅ চাইলে toggle দিয়ে add করবেন, এখন remove রাখুন
+        },
+      });
 
-      // map center server theke paoa jobLocation diye update
-      if (data.jobLocation?.latitude && data.jobLocation?.longitude) {
+      const technicians = Array.isArray(data?.technicians) ? data.technicians : [];
+
+      // ✅ jobLocation থেকে center update
+      if (data?.jobLocation?.latitude != null && data?.jobLocation?.longitude != null) {
         setCenter({
-          lat: data.jobLocation.latitude,
-          lng: data.jobLocation.longitude,
+          lat: Number(data.jobLocation.latitude),
+          lng: Number(data.jobLocation.longitude),
         });
       }
 
-      const mapped = technicians
-        .filter((t) => t.locationStatus === "ONLINE")
-        .map((t) => {
-          const isOnline = t.locationStatus === "ONLINE";
+      const mapped = technicians.map((t) => {
+        const status = String(t.locationStatus || "").toUpperCase();
+        const isOnline = status === "ONLINE";
 
-          return {
-            id: t.id,
-            name: t.name,
-            phone: t.phone,
-            type: t.type, // INTERNAL / FREELANCER
-            lat: t.currentLocation?.latitude ?? null,
-            lng: t.currentLocation?.longitude ?? null,
-            isOnline,
-            statusLabel: isOnline ? "Online" : "Offline",
-            specialty: normalizeSpecialization(t.specialization),
-            lastUpdated: formatTime(t.lastLocationUpdate),
-            distanceKm: t.distanceKm || null,
-            estimatedTravelTime: t.estimatedTravelTime || null,
-            openJobsCount: t.openJobsCount ?? 0,
-          };
-        });
+        const rawLat = t.currentLocation?.latitude ?? null;
+        const rawLng = t.currentLocation?.longitude ?? null;
+
+        const latNum = rawLat != null ? Number(rawLat) : null;
+        const lngNum = rawLng != null ? Number(rawLng) : null;
+
+        return {
+          id: t.id,
+          name: t.name,
+          phone: t.phone,
+          type: t.type, // INTERNAL / FREELANCER
+          specialty: normalizeSpecialization(t.specialization),
+          isOnline,
+          statusLabel: isOnline ? "Online" : "Offline",
+          lat: Number.isFinite(latNum) ? latNum : null,
+          lng: Number.isFinite(lngNum) ? lngNum : null,
+          lastUpdated: formatTime(t.lastLocationUpdate),
+          distanceKm: t.distanceKm || null,
+          estimatedTravelTime: t.estimatedTravelTime || null,
+          openJobsCount: t.openJobsCount ?? 0,
+        };
+      });
 
       setTechnicianLocations(mapped);
-      setTotalCount(data.total || mapped.length);
+      setTotalCount(data?.total ?? mapped.length);
       setLastRefresh(new Date());
     } catch (err) {
       console.error("Failed to load nearby technicians:", err);
@@ -173,6 +199,7 @@ const TechnicianMapViewNearby = () => {
       setLoading(false);
     }
   };
+
 
   // initial load
   useEffect(() => {
@@ -183,16 +210,21 @@ const TechnicianMapViewNearby = () => {
   // auto-refresh every 30s for current center
   useEffect(() => {
     const interval = setInterval(() => {
-      fetchNearbyTechnicians(center.lat, center.lng);
+      fetchNearbyTechnicians(center.lat, center.lng, radius);
     }, 30000);
 
     return () => clearInterval(interval);
-  }, [center.lat, center.lng]);
+  }, [center.lat, center.lng, radius]);
+
 
   // technician name filter (right panel)
   const filteredTechnicians = technicianLocations.filter((tech) =>
     tech.name?.toLowerCase().includes(searchQuery.toLowerCase())
   );
+
+  const onlineCount = filteredTechnicians.filter((t) => t.isOnline).length;
+const totalFilteredCount = filteredTechnicians.length;
+
 
   const mapZoom =
     radius <= 2000 ? 14 : radius <= 5000 ? 13 : radius <= 10000 ? 12 : 11;
@@ -201,39 +233,15 @@ const TechnicianMapViewNearby = () => {
   // Location search: buyer address -> geocode -> update center & reload
   // -------------------------------------------------------------------
   const handleSearchLocation = () => {
-    if (!locationQuery.trim()) return;
+  fetchNearbyTechnicians(center.lat, center.lng, radius);
+};
 
-    if (!isLoaded || !window.google || !window.google.maps) {
-      setError("Map is not ready yet. Please try again in a moment.");
-      return;
-    }
-
-    const geocoder = new window.google.maps.Geocoder();
-    setLoading(true);
-    setError("");
-
-    geocoder.geocode({ address: locationQuery }, (results, status) => {
-      if (status === "OK" && results && results[0]) {
-        const loc = results[0].geometry.location;
-        const newCenter = { lat: loc.lat(), lng: loc.lng() };
-        setCenter(newCenter);
-        fetchNearbyTechnicians(newCenter.lat, newCenter.lng);
-      } else {
-        console.error("Geocode failed:", status, results);
-        setError(
-          "Could not find that location. Please try a more specific address."
-        );
-        setLoading(false);
-      }
-    });
-  };
 
   const handleRadiusChange = (e) => {
     const value = Number(e.target.value);
     if (!Number.isNaN(value) && value > 0) {
       setRadius(value);
-      // zoom update er jonno immediate fetch optional, ichchha hole uncomment:
-      // fetchNearbyTechnicians(center.lat, center.lng);
+      fetchNearbyTechnicians(center.lat, center.lng, value); // ✅ radius -> maxDistance
     }
   };
 
@@ -256,8 +264,9 @@ const TechnicianMapViewNearby = () => {
 
           <div className="flex-1">
             <h2 className="text-base font-semibold text-gray-900">
-              Technician Map View (Online Only)
-            </h2>
+  Nearby Technicians (Online {onlineCount} / {totalFilteredCount})
+</h2>
+
             <p className="text-sm text-gray-500">
               Last updated:{" "}
               {lastRefresh.toLocaleTimeString("en-US", {
@@ -310,9 +319,18 @@ const TechnicianMapViewNearby = () => {
                   <MarkerF
                     key={tech.id}
                     position={{ lat: tech.lat, lng: tech.lng }}
+                    icon={{
+                      path: window.google.maps.SymbolPath.CIRCLE,
+                      fillColor: getPinColor(tech.isOnline), // green/gray
+                      fillOpacity: 1,
+                      strokeColor: "#ffffff",
+                      strokeWeight: 2,
+                      scale: 7,
+                    }}
                   />
                 ) : null
               )}
+
             </GoogleMap>
           ) : (
             !loadError && (
@@ -326,7 +344,7 @@ const TechnicianMapViewNearby = () => {
           <div className="absolute bottom-6 right-6 flex flex-col gap-3">
             <button
               type="button"
-              onClick={() => fetchNearbyTechnicians(center.lat, center.lng)}
+              onClick={() => fetchNearbyTechnicians(center.lat, center.lng, radius)}
               title="Refresh"
               className="flex h-12 w-12 items-center justify-center rounded-full border border-gray-300 bg-white text-gray-700 shadow-lg hover:bg-gray-50"
             >
@@ -358,8 +376,9 @@ const TechnicianMapViewNearby = () => {
             <div className="flex items-center gap-2 text-gray-900">
               <Users className="h-5 w-5" />
               <span className="text-sm font-semibold">
-                Online Technicians ({totalCount})
-              </span>
+  Technicians (Online {onlineCount} / {totalFilteredCount})
+</span>
+
             </div>
           </div>
 
@@ -369,13 +388,16 @@ const TechnicianMapViewNearby = () => {
               <label className="text-xs font-medium text-gray-700">
                 Buyer Location
               </label>
-              <input
-                type="text"
-                placeholder="Type address / area..."
-                value={locationQuery}
-                onChange={(e) => setLocationQuery(e.target.value)}
-                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-[#c20001] focus:outline-none focus:ring-1 focus:ring-[#c20001]"
-              />
+              <Autocomplete onLoad={onAutoLoad} onPlaceChanged={onPlaceChanged}>
+                <input
+                  type="text"
+                  placeholder="Type address / area..."
+                  value={locationQuery}
+                  onChange={(e) => setLocationQuery(e.target.value)}
+                  className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-[#c20001] focus:outline-none focus:ring-1 focus:ring-[#c20001]"
+                />
+              </Autocomplete>
+
             </div>
 
             <div className="flex items-end gap-2">
@@ -427,11 +449,10 @@ const TechnicianMapViewNearby = () => {
                 filteredTechnicians.map((tech) => (
                   <div
                     key={tech.id}
-                    className={`cursor-pointer p-4 text-sm transition-colors ${
-                      hoveredTechnician === tech.id
-                        ? "bg-gray-50"
-                        : "hover:bg-gray-50"
-                    }`}
+                    className={`cursor-pointer p-4 text-sm transition-colors ${hoveredTechnician === tech.id
+                      ? "bg-gray-50"
+                      : "hover:bg-gray-50"
+                      }`}
                     onMouseEnter={() => setHoveredTechnician(tech.id)}
                     onMouseLeave={() => setHoveredTechnician(null)}
                   >

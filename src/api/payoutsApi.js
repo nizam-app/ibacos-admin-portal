@@ -23,6 +23,11 @@ const PayoutsAPI = {
 
   // History list
   getHistory: () => axiosClient.get("/payouts/history"),
+
+  getBatchDetails(batchId) {
+  return axiosClient.get(`/payouts/batches/${batchId}`);
+}
+
 };
 
 export default PayoutsAPI;

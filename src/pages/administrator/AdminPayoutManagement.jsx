@@ -398,116 +398,88 @@ const AdminPayoutManagement = () => {
     loadEarlyRequests();
   }, []);
   // Summary + pending + batches + history
-  useEffect(() => {
-    const loadPayoutDashboard = async () => {
-      try {
-        const [summaryRes, pendingRes, batchesRes, historyRes] =
-          await Promise.all([
-            PayoutsAPI.getSummary(),
-            PayoutsAPI.getPendingCommissions(),
-            PayoutsAPI.getBatches(),
-            PayoutsAPI.getHistory(),
-          ]);
 
-        // 1) summary
-        setSummary(summaryRes.data || null);
+  const loadPayoutDashboard = async () => {
+    const [summaryRes, pendingRes, batchesRes, historyRes] = await Promise.all([
+      PayoutsAPI.getSummary(),
+      PayoutsAPI.getPendingCommissions(),
+      PayoutsAPI.getBatches(),
+      PayoutsAPI.getHistory(),
+    ]);
 
-        // 2) pending commissions table mapping
-        const pendingSource = Array.isArray(pendingRes.data)
-        ? pendingRes.data
-        : [];
+    setSummary(summaryRes.data || null);
 
-      const pendingMapped = pendingSource.map((item) => ({
+    const pendingSource = Array.isArray(pendingRes.data) ? pendingRes.data : [];
+    setPendingCommissions(pendingSource.map((item) => ({
+      id: item.id,
+      workOrderId: item.workOrder,
+      technicianName: item.technician,
+      technicianId: item.technicianId,
+      employmentType: "",
+      type: item.type === "BONUS" ? "Bonus" : "Commission",
+      serviceCategory: item.service,
+      paymentAmount: item.payment ?? 0,
+      rate: item.rate != null ? item.rate * 100 : 0,
+      amount: item.amount ?? 0,
+      paymentDate: item.date ? new Date(item.date).toLocaleDateString("en-US", {
+        year: "numeric", month: "short", day: "numeric"
+      }) : "",
+    })));
+
+    const batchesSource = Array.isArray(batchesRes.data) ? batchesRes.data : [];
+
+    const batchesMapped = batchesSource.map((item) => {
+      const apiStatus = String(item.status || "").toUpperCase();
+      const uiStatus =
+        apiStatus === "PENDING" ? "Pending"
+          : apiStatus === "SCHEDULED" || apiStatus === "CONFIRMED" ? "Confirmed"
+            : apiStatus === "PAID" || apiStatus === "COMPLETED" || apiStatus === "PROCESSED" ? "Paid"
+              : "Pending";
+
+      return {
         id: item.id,
-        workOrderId: item.workOrder,              // e.g. "WO-1764925962143"
-        technicianName: item.technician,         // "Adama Ba"
-        technicianId: item.technicianId,         // 5
-        employmentType: "",                      // future: FREELANCER / INTERNAL, ekhane empty rakhlam
-
-        // COMMISSION / BONUS → UI text
-        type: item.type === "BONUS" ? "Bonus" : "Commission",
-
-        serviceCategory: item.service,           // "AC Filter Cleaning"
-        paymentAmount: item.payment ?? 0,        // 2000
-
-        // backend rate = 0.12 → UI te 12 dekhabo, karon niche table e tumi `{c.rate}%` use korcho
-        rate: item.rate != null ? item.rate * 100 : 0,
-
-        amount: item.amount ?? 0,                // 240
-
-        paymentDate: item.date
-          ? new Date(item.date).toLocaleDateString("en-US", {
-              year: "numeric",
-              month: "short",
-              day: "numeric",
-            })
-          : "",
-      }));
-
-      setPendingCommissions(pendingMapped);
-
-        // 3) payout batches mapping
-        const batchesMapped = (batchesRes.data || []).map((item) => ({
-          id: item.id,
-          batchNumber: `Batch #${item.id}`,
-          createdDate: item.createdAt
-            ? new Date(item.createdAt).toLocaleDateString("en-US")
-            : "",
-          payoutDate: item.scheduledFor
-            ? new Date(item.scheduledFor).toLocaleDateString("en-US")
-            : item.processedAt
-              ? new Date(item.processedAt).toLocaleDateString("en-US")
-              : "",
-          totalAmount: item.totalAmount ?? 0,
-          technicianCount: 1, // এই API প্রতি rowতে এক technician
-          commissionsCount: item.commissionsCount ?? 0,
-          status:
-            item.status === "PAID" || item.status === "COMPLETED"
-              ? "Paid"
-              : item.status === "SCHEDULED"
-                ? "Pending"
-                : "Processed",
-          confirmedBy: item.createdBy || null,
-          confirmedDate: item.scheduledFor
-            ? new Date(item.scheduledFor).toLocaleDateString("en-US")
-            : "",
-          paidBy: null,
-          paidDate: item.processedAt
+        batchNumber: `Batch #${item.id}`,
+        createdDate: item.createdAt ? new Date(item.createdAt).toLocaleDateString("en-US") : "",
+        payoutDate: item.scheduledFor
+          ? new Date(item.scheduledFor).toLocaleDateString("en-US")
+          : item.processedAt
             ? new Date(item.processedAt).toLocaleDateString("en-US")
             : "",
-          payouts: [], // breakdown backend থেকে এখন আসছে না
-        }));
-        setPayoutBatches(batchesMapped);
+        totalAmount: item.totalAmount ?? 0,
+        technicianCount: item.technicianCount ?? 1,
+        commissionsCount: item.commissionsCount ?? 0,
+        status: uiStatus,
+        confirmedBy: item.createdBy || null,
+        confirmedDate: item.scheduledFor ? new Date(item.scheduledFor).toLocaleDateString("en-US") : "",
+        paidBy: null,
+        paidDate: item.processedAt ? new Date(item.processedAt).toLocaleDateString("en-US") : "",
+        payouts: [],
+      };
+    });
 
-        // 4) payout history mapping
-        const historyMapped = (historyRes.data || []).map((item) => ({
-          id: item.id,
-          payoutId: item.id,
-          workOrderId: "—", // backend এখন দেয় না
-          technicianName:
-            item.technician ||
-            (item.technicianId ? `Technician #${item.technicianId}` : "—"),
-          type: "Commission", // placeholder, চাইলে backend এ type যোগ করবে
-          amount: item.totalAmount ?? 0,
-          paymentDate: item.createdAt
-            ? new Date(item.createdAt).toLocaleDateString("en-US")
-            : "",
-          payoutDate: item.processedAt
-            ? new Date(item.processedAt).toLocaleDateString("en-US")
-            : "",
-          batchNumber: "—",
-          status: "Paid",
-        }));
-        setPayoutHistory(historyMapped);
-      } catch (err) {
-        console.error("Failed to load payout dashboard data", err);
-        // চাইলে এখানে আলাদা error state রাখতে পারো
-      }
-    };
+    setPayoutBatches(batchesMapped);
 
-    loadPayoutDashboard();
+    const historySource = Array.isArray(historyRes.data) ? historyRes.data : [];
+    setPayoutHistory(historySource.map((item) => ({
+      id: item.id,
+      payoutId: item.id,
+      workOrderId: "—",
+      technicianName: item.technician || (item.technicianId ? `Technician #${item.technicianId}` : "—"),
+      type: "Commission",
+      amount: item.totalAmount ?? 0,
+      paymentDate: item.createdAt ? new Date(item.createdAt).toLocaleDateString("en-US") : "",
+      payoutDate: item.processedAt ? new Date(item.processedAt).toLocaleDateString("en-US") : "",
+      batchNumber: "—",
+      status: "Paid",
+    })));
+  };
+
+
+  useEffect(() => {
+    loadPayoutDashboard().catch((err) => console.error(err));
   }, []);
-  
+
+
 
 
 
@@ -636,31 +608,40 @@ const AdminPayoutManagement = () => {
         showCancelButton: true,
         confirmButtonText: "Yes, process",
       });
-
       if (!confirm.isConfirmed) return;
 
       const { data } = await PayoutsAPI.processBatch(batchId);
 
-      Swal.fire(
-        "Batch processed",
-        data?.message || "Payout batch processed successfully.",
-        "success"
-      );
+      Swal.fire("Batch processed", data?.message || "Payout batch processed successfully.", "success");
 
-      // আবার batches + history reload করে নাও
-      // await loadPayoutDashboard();
+      await loadPayoutDashboard(); // ✅ এইটা MUST
     } catch (err) {
       console.error("Process payout batch failed", err);
-      Swal.fire(
-        "Error",
-        err?.response?.data?.message ||
-        "Failed to process payout batch. Please try again.",
-        "error"
-      );
+      Swal.fire("Error", err?.response?.data?.message || "Failed to process payout batch. Please try again.", "error");
     }
   };
 
-  const handleMarkPaid = handleConfirmBatch;
+
+  const handleMarkPaid = async (batchId) => {
+    try {
+      const confirm = await Swal.fire({
+        title: "Mark batch as paid?",
+        text: "This will mark the batch as PAID.",
+        icon: "question",
+        showCancelButton: true,
+        confirmButtonText: "Yes, mark paid",
+      });
+      if (!confirm.isConfirmed) return;
+
+      const { data } = await PayoutsAPI.markPaid(batchId); // ✅ আলাদা API method বানান
+
+      Swal.fire("Paid", data?.message || "Batch marked as paid.", "success");
+      await loadPayoutDashboard();
+    } catch (err) {
+      Swal.fire("Error", err?.response?.data?.message || "Failed to mark as paid.", "error");
+    }
+  };
+
 
 
   const openReviewRequest = (request) => {
@@ -775,10 +756,33 @@ const AdminPayoutManagement = () => {
   };
 
 
-  const openBatchDetails = (batch) => {
-    setSelectedBatch(batch);
-    setIsBatchDetailsOpen(true);
+  const openBatchDetails = async (batch) => {
+    try {
+      setIsBatchDetailsOpen(true);
+      setSelectedBatch(null); // loading state
+
+      const { data } = await PayoutsAPI.getBatchDetails(batch.id);
+
+      // ধরলাম response shape: { batch, payouts: [...] }
+      // payouts item: { technicianName, employmentType, amount, commissionsCount }
+      setSelectedBatch({
+        ...batch,
+        payouts: data.payouts || [],
+        commissionsCount: data.commissionsCount ?? batch.commissionsCount,
+        technicianCount: data.technicianCount ?? batch.technicianCount,
+        totalAmount: data.totalAmount ?? batch.totalAmount,
+      });
+    } catch (err) {
+      console.error("Failed to load batch details", err);
+      Swal.fire(
+        "Error",
+        err?.response?.data?.message || "Failed to load batch details.",
+        "error"
+      );
+      setIsBatchDetailsOpen(false);
+    }
   };
+
 
   // --------------------------------------------------
   return (
@@ -916,8 +920,8 @@ const AdminPayoutManagement = () => {
               <div>
                 <CardTitle>Pending Commissions &amp; Bonuses</CardTitle>
                 <CardDescription>
-  Verified payments ready for weekly payout based on completed jobs
-</CardDescription>
+                  Verified payments ready for weekly payout based on completed jobs
+                </CardDescription>
               </div>
               <Button onClick={() => setIsCreateBatchOpen(true)}>
                 <Plus className="h-4 w-4 mr-1.5" />
@@ -1004,7 +1008,7 @@ const AdminPayoutManagement = () => {
                           colSpan={8}
                           className="px-4 py-8 text-center text-gray-500"
                         >
-                          No pending commissions found 
+                          No pending commissions found
                         </td>
                       </tr>
                     ) : (
@@ -1193,7 +1197,7 @@ const AdminPayoutManagement = () => {
           <CardHeader>
             <CardTitle>Payout Batches</CardTitle>
             <CardDescription>
-              Weekly payout batches scheduled for every Monday 
+              Weekly payout batches scheduled for every Monday
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -1612,7 +1616,14 @@ const AdminPayoutManagement = () => {
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-100">
-                    {selectedBatch.payouts.map((p, idx) => (
+
+                    {!selectedBatch.payouts?.length ? (
+                      <tr>
+                        <td colSpan={4} className="px-4 py-6 text-center text-gray-500">
+                          No commission details found for this batch.
+                        </td>
+                      </tr>
+                    ) : ( selectedBatch.payouts.map((p, idx) => (
                       <tr key={idx}>
                         <td className="px-4 py-3 text-gray-900">
                           {p.technicianName}
@@ -1627,7 +1638,7 @@ const AdminPayoutManagement = () => {
                           {p.commissionsCount}
                         </td>
                       </tr>
-                    ))}
+                    )))}
                   </tbody>
                 </table>
               </div>

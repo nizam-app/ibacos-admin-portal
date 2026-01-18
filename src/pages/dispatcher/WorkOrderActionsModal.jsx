@@ -39,9 +39,23 @@ function WorkOrderActionsModal({
 
   const today = new Date().toISOString().split("T")[0];
 
+
+
   const filteredTechs = technicians
     .filter((t) => !blockedTechnicians.includes(t.id))
     .sort((a, b) => (a.distance || 0) - (b.distance || 0));
+
+  const getTechStatus = (tech) => {
+    // backend কখনো status, কখনো locationStatus পাঠাতে পারে
+    const s = String(tech?.status ?? tech?.locationStatus ?? "").toUpperCase();
+    return s === "ONLINE" ? "ONLINE" : "OFFLINE";
+  };
+
+  const getTechStatusBadgeClasses = (status) => {
+    if (status === "ONLINE") return "bg-green-100 text-green-800 border border-green-200";
+    return "bg-gray-100 text-gray-700 border border-gray-200";
+  };
+
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -192,11 +206,10 @@ function WorkOrderActionsModal({
                           key={tech.id}
                           type="button"
                           onClick={() => setSelectedTechnician(tech.id)}
-                          className={`flex w-full items-center justify-between border-b px-3 py-2 text-left text-sm transition hover:bg-gray-50 ${
-                            selectedTechnician === tech.id
+                          className={`flex w-full items-center justify-between border-b px-3 py-2 text-left text-sm transition hover:bg-gray-50 ${selectedTechnician === tech.id
                               ? "bg-blue-50 border-l-4 border-l-[#c20001]"
                               : ""
-                          }`}
+                            }`}
                         >
                           <div className="min-w-0 flex-1">
                             <p className="truncate font-medium text-gray-900">
@@ -205,23 +218,21 @@ function WorkOrderActionsModal({
                             <p className="text-xs text-gray-500">
                               <MapPin className="mr-1 inline-block h-3 w-3" />
                               {tech.distanceKm ||
-                                `${
-                                  tech.distance != null
-                                    ? tech.distance.toFixed(2)
-                                    : "-"
+                                `${tech.distance != null
+                                  ? tech.distance.toFixed(2)
+                                  : "-"
                                 } km`}{" "}
                               • {tech.type}
                             </p>
                           </div>
-                          <Badge
-                            className={`${
-                              tech.status === "ONLINE"
-                              ? "bg-orange-100 text-orange-800"
-                                : "bg-green-100 text-green-800"
-                            }`}
-                          >
-                            {tech.status}
-                          </Badge>
+                          {(() => {
+                            const st = getTechStatus(tech);
+                            return (
+                              <Badge className={getTechStatusBadgeClasses(st)}>
+                                {st === "ONLINE" ? "Online" : "Offline"}
+                              </Badge>
+                            );
+                          })()}
                         </button>
                       ))}
                     </div>
@@ -322,17 +333,16 @@ function WorkOrderActionsModal({
           <button
             type="submit"
             onClick={handleSubmit}
-            className={`inline-flex items-center justify-center rounded-md px-4 py-2 text-sm font-medium text-white shadow-sm transition ${
-              action === "cancel"
+            className={`inline-flex items-center justify-center rounded-md px-4 py-2 text-sm font-medium text-white shadow-sm transition ${action === "cancel"
                 ? "bg-red-600 hover:bg-red-700"
                 : "bg-[#c20001] hover:bg-[#a00001]"
-            }`}
+              }`}
           >
             {action === "cancel"
               ? "Confirm Cancellation"
               : action === "reschedule"
-              ? "Save Schedule"
-              : "Update Work Order"}
+                ? "Save Schedule"
+                : "Update Work Order"}
           </button>
         </div>
       </div>

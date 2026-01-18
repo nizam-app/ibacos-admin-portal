@@ -39,6 +39,13 @@ import PaymentVerificationModal from '../../components/PaymentVerificationModal'
 // MAIN: AdminPaymentsPage – API integrated
 // ------------------------------------------------------------------
 const AdminPaymentsPage = () => {
+
+  const [statusCounts, setStatusCounts] = useState({
+    all: 0,
+    PENDING_VERIFICATION: 0,
+    VERIFIED: 0,
+    REJECTED: 0,
+  });
   const [stats, setStats] = useState({
     pendingUpload: 0,
     awaitingVerification: 0,
@@ -63,13 +70,13 @@ const AdminPaymentsPage = () => {
 
   // ---- Load stats ----
   const fetchStats = async () => {
-  try {
-    const res = await PaymentsAPI.getPaymentStats();
-    setStats(res.data);
-  } catch (err) {
-    console.error(err);
-  }
-};
+    try {
+      const res = await PaymentsAPI.getPaymentStats();
+      setStats(res.data);
+    } catch (err) {
+      console.error(err);
+    }
+  };
 
 
   // ---- Load payments ----
@@ -100,9 +107,36 @@ const AdminPaymentsPage = () => {
     }
   };
 
+  const fetchStatusCounts = async () => {
+    try {
+      const [allRes, pendingRes, verifiedRes, rejectedRes] = await Promise.all([
+        PaymentsAPI.getPayments({ page: 1, limit: 1 }),
+        PaymentsAPI.getPayments({ page: 1, limit: 1, status: "PENDING_VERIFICATION" }),
+        PaymentsAPI.getPayments({ page: 1, limit: 1, status: "VERIFIED" }),
+        PaymentsAPI.getPayments({ page: 1, limit: 1, status: "REJECTED" }),
+      ]);
+
+      setStatusCounts({
+        all: allRes.data?.pagination?.total ?? 0,
+        PENDING_VERIFICATION: pendingRes.data?.pagination?.total ?? 0,
+        VERIFIED: verifiedRes.data?.pagination?.total ?? 0,
+        REJECTED: rejectedRes.data?.pagination?.total ?? 0,
+      });
+    } catch (err) {
+      console.error("Failed to load status counts", err);
+    }
+  };
+
+
+  const handlePageChange = (newPage) => {
+    fetchPayments(newPage, filterStatus);
+  };
+
+
   // initial load
   useEffect(() => {
     fetchStats();
+    fetchStatusCounts();
     fetchPayments(1, filterStatus);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -119,14 +153,15 @@ const AdminPaymentsPage = () => {
       prev.map((p) =>
         p.id === paymentId
           ? {
-              ...p,
-              status: "VERIFIED",
-              rejectedReason: null,
-            }
+            ...p,
+            status: "VERIFIED",
+            rejectedReason: null,
+          }
           : p
       )
     );
     fetchStats();
+    fetchStatusCounts();
   };
 
   // local update after reject
@@ -135,14 +170,15 @@ const AdminPaymentsPage = () => {
       prev.map((p) =>
         p.id === paymentId
           ? {
-              ...p,
-              status: "REJECTED",
-              rejectedReason: reason,
-            }
+            ...p,
+            status: "REJECTED",
+            rejectedReason: reason,
+          }
           : p
       )
     );
     fetchStats();
+    fetchStatusCounts();
   };
 
   const getStatusBadge = (status) => {
@@ -258,10 +294,10 @@ const AdminPaymentsPage = () => {
         <div className="flex items-center justify-between text-white">
           <div>
             <p className="text-xs text-white/90">
-              Total Commissions (from backend)
+              Total Commissions
             </p>
             <p className="mt-1 text-2xl font-semibold">
-              {stats.totalCommissions} KES
+              {stats.totalCommissions} MRU 
             </p>
           </div>
           <div className="rounded-lg bg-white/20 p-3">
@@ -292,13 +328,18 @@ const AdminPaymentsPage = () => {
               className="w-full appearance-none rounded-lg border border-gray-300 bg-white py-2 pl-10 pr-8 text-sm text-gray-900 shadow-sm focus:outline-none focus:ring-[1px] focus:ring-[#ffb111]"
             >
               <option value="all">
-                All Payments ({pagination.total || filteredPayments.length})
+                All Payments ({statusCounts.all})
               </option>
               <option value="PENDING_VERIFICATION">
-                Awaiting Verification ({stats.awaitingVerification})
+                Awaiting Verification ({statusCounts.PENDING_VERIFICATION})
               </option>
-              <option value="VERIFIED">Verified ({stats.verified})</option>
-              <option value="REJECTED">Rejected ({stats.rejected})</option>
+              <option value="VERIFIED">
+                Verified ({statusCounts.VERIFIED})
+              </option>
+              <option value="REJECTED">
+                Rejected ({statusCounts.REJECTED})
+              </option>
+
             </select>
             <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-400">
               ▼
@@ -337,11 +378,10 @@ const AdminPaymentsPage = () => {
                 return (
                   <div
                     key={p.id}
-                    className={`rounded-lg border p-4 transition-all ${
-                      needsAttention
-                        ? "border-yellow-300 bg-yellow-50"
-                        : "border-gray-200 hover:border-gray-300"
-                    }`}
+                    className={`rounded-lg border p-4 transition-all ${needsAttention
+                      ? "border-yellow-300 bg-yellow-50"
+                      : "border-gray-200 hover:border-gray-300"
+                      }`}
                   >
                     <div className="flex items-start justify-between gap-4">
                       <div className="flex-1 space-y-2">
@@ -373,7 +413,7 @@ const AdminPaymentsPage = () => {
                           <div>
                             <p className="text-xs text-gray-600">Amount</p>
                             <p className="text-gray-900">
-                              {p.amount != null ? `${p.amount} KES` : "-"}
+                              {p.amount != null ? `${p.amount} MRU ` : "-"}
                             </p>
                           </div>
                           <div>
@@ -397,11 +437,10 @@ const AdminPaymentsPage = () => {
                         <button
                           type="button"
                           onClick={() => setSelectedPayment(p)}
-                          className={`rounded-[10px] px-4 py-2.5 text-sm font-medium shadow-sm ${
-                            needsAttention
-                              ? "bg-[#c20001] text-white hover:bg-[#c20001]/90"
-                              : "border border-gray-300 bg-white text-gray-800 hover:bg-gray-50"
-                          }`}
+                          className={`rounded-[10px] px-4 py-2.5 text-sm font-medium shadow-sm ${needsAttention
+                            ? "bg-[#c20001] text-white hover:bg-[#c20001]/90"
+                            : "border border-gray-300 bg-white text-gray-800 hover:bg-gray-50"
+                            }`}
                         >
                           {p.status === "PENDING_VERIFICATION"
                             ? "Verify Now"
@@ -415,13 +454,40 @@ const AdminPaymentsPage = () => {
             </div>
           )}
         </div>
+        {/* Pagination Footer */}
+        <div className="flex items-center justify-end gap-5 border-t border-gray-100 px-4 py-3 text-xs text-gray-600">
+          <div>
+            Page <span className="font-medium">{pagination.page}</span> of{" "}
+            <span className="font-medium">{pagination.totalPages}</span> •{" "}
+            <span className="font-medium">{pagination.total}</span> results
+          </div>
+
+          <div className="inline-flex items-center gap-2">
+            <button
+              className="rounded-md border border-gray-200 px-3 py-1 disabled:cursor-not-allowed disabled:opacity-50"
+              disabled={pagination.page <= 1 || loading}
+              onClick={() => handlePageChange(pagination.page - 1)}
+            >
+              Prev
+            </button>
+
+            <button
+              className="rounded-md border border-gray-200 px-3 py-1 disabled:cursor-not-allowed disabled:opacity-50"
+              disabled={pagination.page >= pagination.totalPages || loading}
+              onClick={() => handlePageChange(pagination.page + 1)}
+            >
+              Next
+            </button>
+          </div>
+        </div>
+
       </div>
 
       {/* Modal */}
       {selectedPayment && (
         <PaymentVerificationModal
           isOpen={!!selectedPayment}
-          onClose={() => setSelectedPayment(null)}  
+          onClose={() => setSelectedPayment(null)}
           payment={selectedPayment}
           onVerified={handleLocalVerified}
           onRejected={handleLocalRejected}

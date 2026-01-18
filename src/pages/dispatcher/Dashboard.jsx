@@ -11,6 +11,8 @@ import {
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import axiosClient from "../../api/axiosClient";
+import TechnicianAPI from "../../api/TechnicianAPI";
+
 
 // Small reusable card for top stats
 function StatCard({ item }) {
@@ -65,6 +67,46 @@ function mapWorkOrderStatus(status) {
   return { label: status, color: "bg-gray-100 text-gray-700" };
 }
 
+function computeTechnicianStatus(techs) {
+  const all = Array.isArray(techs) ? techs.length : 0;
+
+  const getOpenCount = (t) => {
+    if (Array.isArray(t.openWorkOrders)) return t.openWorkOrders.length;
+    if (typeof t.openWorkOrders === "number") return t.openWorkOrders;
+    if (typeof t.openJobsCount === "number") return t.openJobsCount;
+    return 0;
+  };
+
+  let blocked = 0;
+  let busy = 0;
+  let active = 0;
+  let offline = 0;
+
+  (techs || []).forEach((t) => {
+    const isBlocked = t.isBlocked === true || String(t.status || "").toUpperCase() === "BLOCKED";
+    if (isBlocked) blocked++;
+
+    const openCount = getOpenCount(t);
+    const isBusy = !isBlocked && (openCount > 0 || String(t.availability || "").toUpperCase() === "BUSY");
+    if (isBusy) busy++;
+
+    const isActive = !isBlocked && !isBusy && String(t.status || "").toUpperCase() === "ACTIVE";
+    if (isActive) active++;
+
+    const isOnline = String(t.locationStatus || "").toUpperCase() === "ONLINE";
+    if (!isOnline) offline++;
+  });
+
+  return {
+    allTechnicians: all,
+    activeTechnicians: active,      // Available for assignment
+    busyTechnicians: busy,          // Currently on job
+    blockedTechnicians: blocked,    // Blocked
+    offlineTechnicians: offline,    // Optional row (reconcile totals)
+  };
+}
+
+
 const DispatcherDashboard = () => {
   const navigate = useNavigate();
 
@@ -82,22 +124,60 @@ const DispatcherDashboard = () => {
         setLoading(true);
         setError("");
 
-        const [overviewRes, techStatusRes, recentWORes] = await Promise.all([
+        const results = await Promise.allSettled([
           axiosClient.get("/dispatch/overview"),
-          axiosClient.get("/dispatch/technician-status"),
+          axiosClient.get("/dispatch/technician-status"),      // fallback
           axiosClient.get("/dispatch/recent-work-orders"),
+          TechnicianAPI.getDirectory({ search: "", specialization: "All", type: "All" }), // preferred
         ]);
 
         if (!isMounted) return;
 
-        setOverview(overviewRes.data || null);
-        setTechStatus(techStatusRes.data || null);
-        setRecentWorkOrders(Array.isArray(recentWORes.data) ? recentWORes.data : []);
-      } catch (err) {
-        console.error("Failed to load dispatcher overview:", err);
-        if (isMounted) {
+        const [overviewRes, techStatusRes, recentWORes, techDirRes] = results;
+
+        // ✅ overview
+        if (overviewRes.status === "fulfilled") {
+          setOverview(overviewRes.value.data || null);
+        } else {
+          console.error("overview failed:", overviewRes.reason);
           setError("Failed to load dispatcher overview data.");
         }
+
+        // ✅ recent work orders
+        if (recentWORes.status === "fulfilled") {
+          setRecentWorkOrders(
+            Array.isArray(recentWORes.value.data) ? recentWORes.value.data : []
+          );
+        } else {
+          console.error("recent WO failed:", recentWORes.reason);
+          setRecentWorkOrders([]);
+        }
+
+        // ✅ technician status (prefer directory, fallback to /dispatch/technician-status)
+        if (techDirRes.status === "fulfilled") {
+          const techs = techDirRes.value.data?.technicians || [];
+
+          // simple compute:
+          const blocked = techs.filter(t => t.isBlocked === true || String(t.status || "").toUpperCase() === "BLOCKED").length;
+          const busy = techs.filter(t => (t.openJobsCount ?? 0) > 0 || String(t.availability || "").toUpperCase() === "BUSY").length;
+          const active = Math.max(0, techs.length - blocked - busy);
+
+          setTechStatus({
+            allTechnicians: techs.length,
+            activeTechnicians: active,
+            busyTechnicians: busy,
+            blockedTechnicians: blocked,
+          });
+        } else if (techStatusRes.status === "fulfilled") {
+          // fallback from backend summary API
+          setTechStatus(techStatusRes.value.data || null);
+        } else {
+          console.error("tech status failed:", techDirRes.reason, techStatusRes.reason);
+          setTechStatus(null);
+        }
+      } catch (err) {
+        console.error("Dashboard fetchData fatal:", err);
+        if (isMounted) setError("Failed to load dispatcher overview data.");
       } finally {
         if (isMounted) setLoading(false);
       }
@@ -109,6 +189,7 @@ const DispatcherDashboard = () => {
       isMounted = false;
     };
   }, []);
+
 
   const stats = [
     {

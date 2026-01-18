@@ -376,22 +376,43 @@ function ServiceRequestForm() {
       const preferredDateIso = formData.preferredDate
         ? new Date(formData.preferredDate).toISOString()
         : null;
+
+
+      const isUsingSavedAddress = Boolean(foundCustomer && useSavedAddress);
+
+      const finalAddress = isUsingSavedAddress
+        ? (foundCustomer?.homeAddress || buildFullAddress(formData))
+        : buildFullAddress(formData);
+
+      const finalLat = isUsingSavedAddress
+        ? (foundCustomer?.latitude ?? formData.latitude)
+        : formData.latitude;
+
+      const finalLng = isUsingSavedAddress
+        ? (foundCustomer?.longitude ?? formData.longitude)
+        : formData.longitude;
+
       const srPayload = {
         phone: customerPhone,
         name: customerNameToSend,
         email: formData.email || null,
-        address: buildFullAddress(formData),
-        latitude: formData.latitude,
-        longitude: formData.longitude,
+
+        // ✅ এখানেই change
+        address: finalAddress,
+        latitude: finalLat,
+        longitude: finalLng,
+
         categoryId: Number(formData.categoryId),
         subserviceId: Number(formData.subserviceId),
-        serviceId: formData.serviceId ? Number(formData.serviceId) : null,
+        serviceId: Number(formData.serviceId),
         description: formData.description,
-        paymentType: "CASH", // 👉 চাইলে UI থেকে নেবে
-        priority: formData.priority.toUpperCase(), // LOW / MEDIUM / HIGH
+        paymentType: "CASH",
+        priority: formData.priority.toUpperCase(),
         preferredDate: preferredDateIso,
         preferredTime: formData.preferredTime,
       };
+
+      console.log("SR payload:", srPayload);
 
       const { data: createdSR } = await axiosClient.post("/sr", srPayload);
 
@@ -414,6 +435,9 @@ function ServiceRequestForm() {
     (s) => String(s.id) === String(formData.subserviceId)
   );
 
+
+  const isUsingSavedAddress = Boolean(foundCustomer && useSavedAddress);
+  const shouldRequireAddressFields = !isUsingSavedAddress;
 
   // =========================
   //   RENDER
@@ -652,7 +676,7 @@ function ServiceRequestForm() {
                     htmlFor="address"
                     className="text-xs font-medium text-gray-700"
                   >
-                    Street Address *
+                    Street Address {!isUsingSavedAddress && <span className="text-[#c20001]">*</span>}
                   </label>
                   <input
                     id="address"
@@ -666,8 +690,8 @@ function ServiceRequestForm() {
                         address: e.target.value,
                       }))
                     }
-                    disabled={foundCustomer && useSavedAddress}
-                    required
+                    disabled={isUsingSavedAddress}
+                    required={shouldRequireAddressFields}
                   />
                 </div>
 
@@ -676,7 +700,7 @@ function ServiceRequestForm() {
                     htmlFor="city"
                     className="text-xs font-medium text-gray-700"
                   >
-                    City *
+                    City {!isUsingSavedAddress && <span className="text-[#c20001]">*</span>}
                   </label>
                   <input
                     id="city"
@@ -687,8 +711,8 @@ function ServiceRequestForm() {
                     onChange={(e) =>
                       setFormData((prev) => ({ ...prev, city: e.target.value }))
                     }
-                    disabled={foundCustomer && useSavedAddress}
-                    required
+                    disabled={isUsingSavedAddress}
+                    required={shouldRequireAddressFields}
                   />
                 </div>
               </div>
@@ -906,7 +930,7 @@ function ServiceRequestForm() {
                     <p className="text-xs text-gray-600 mt-1">
                       Base price:{" "}
                       <span className="font-semibold text-gray-900">
-                        ${selectedSubservice.baseRate} 
+                        {selectedSubservice.baseRate} MRU
                       </span>
                     </p>
                   )}

@@ -3,6 +3,8 @@ import React, { useEffect, useMemo, useState } from "react";
 import { Search } from "lucide-react";
 import Swal from "sweetalert2";
 import axiosClient from "../../api/axiosClient";
+import { io } from "socket.io-client";
+
 
 // ------------------ helpers ------------------
 
@@ -146,8 +148,35 @@ const DispatcherServiceRequests = () => {
   };
 
   useEffect(() => {
-    fetchServiceRequests();
-  }, []);
+  // ✅ initial load
+  fetchServiceRequests();
+
+  // ✅ socket connect
+  const socket = io(import.meta.env.VITE_WS_URL || "http://localhost:5000", {
+    transports: ["websocket"],
+    // auth: { token: localStorage.getItem("token") }, // যদি token use করেন
+  });
+
+  // ✅ dispatcher/admin room join (আপনার auth থেকে role থাকলে সেটা পাঠাবেন)
+
+  socket.emit("join", { role: "DISPATCHER" }); // বা "ADMIN"
+
+  // ✅ new SR created → instantly update list
+  socket.on("sr:created", (newSr) => {
+    setServiceRequests((prev) => {
+      if (prev.some((x) => x.id === newSr.id)) return prev; // duplicate guard
+      return [newSr, ...prev];
+    });
+    setPage(1); // optional: 
+  });
+
+  // ✅ cleanup
+  return () => {
+    socket.off("sr:created");
+    socket.disconnect();
+  };
+}, []);
+
 
   // ------------------ filters / derived data ------------------
 
