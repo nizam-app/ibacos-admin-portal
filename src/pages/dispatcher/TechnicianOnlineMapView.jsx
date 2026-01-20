@@ -223,7 +223,7 @@ const TechnicianMapViewNearby = () => {
   );
 
   const onlineCount = filteredTechnicians.filter((t) => t.isOnline).length;
-const totalFilteredCount = filteredTechnicians.length;
+  const totalFilteredCount = filteredTechnicians.length;
 
 
   const mapZoom =
@@ -233,8 +233,8 @@ const totalFilteredCount = filteredTechnicians.length;
   // Location search: buyer address -> geocode -> update center & reload
   // -------------------------------------------------------------------
   const handleSearchLocation = () => {
-  fetchNearbyTechnicians(center.lat, center.lng, radius);
-};
+    fetchNearbyTechnicians(center.lat, center.lng, radius);
+  };
 
 
   const handleRadiusChange = (e) => {
@@ -264,8 +264,8 @@ const totalFilteredCount = filteredTechnicians.length;
 
           <div className="flex-1">
             <h2 className="text-base font-semibold text-gray-900">
-  Nearby Technicians (Online {onlineCount} / {totalFilteredCount})
-</h2>
+              Nearby Technicians (Online {onlineCount} / {totalFilteredCount})
+            </h2>
 
             <p className="text-sm text-gray-500">
               Last updated:{" "}
@@ -319,14 +319,14 @@ const totalFilteredCount = filteredTechnicians.length;
                   <MarkerF
                     key={tech.id}
                     position={{ lat: tech.lat, lng: tech.lng }}
-                    icon={{
+                    icon={window.google?.maps ? {
                       path: window.google.maps.SymbolPath.CIRCLE,
-                      fillColor: getPinColor(tech.isOnline), // green/gray
+                      fillColor: getPinColor(tech.isOnline),
                       fillOpacity: 1,
                       strokeColor: "#ffffff",
                       strokeWeight: 2,
                       scale: 7,
-                    }}
+                    } : undefined}
                   />
                 ) : null
               )}
@@ -376,8 +376,8 @@ const totalFilteredCount = filteredTechnicians.length;
             <div className="flex items-center gap-2 text-gray-900">
               <Users className="h-5 w-5" />
               <span className="text-sm font-semibold">
-  Technicians (Online {onlineCount} / {totalFilteredCount})
-</span>
+                Technicians (Online {onlineCount} / {totalFilteredCount})
+              </span>
 
             </div>
           </div>
@@ -388,15 +388,26 @@ const totalFilteredCount = filteredTechnicians.length;
               <label className="text-xs font-medium text-gray-700">
                 Buyer Location
               </label>
-              <Autocomplete onLoad={onAutoLoad} onPlaceChanged={onPlaceChanged}>
+              {isLoaded ? (
+                <Autocomplete onLoad={onAutoLoad} onPlaceChanged={onPlaceChanged}>
+                  <input
+                    type="text"
+                    placeholder="Type address / area..."
+                    value={locationQuery}
+                    onChange={(e) => setLocationQuery(e.target.value)}
+                    className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-[#c20001] focus:outline-none focus:ring-1 focus:ring-[#c20001]"
+                  />
+                </Autocomplete>
+              ) : (
                 <input
                   type="text"
-                  placeholder="Type address / area..."
+                  placeholder="Loading Google Places..."
                   value={locationQuery}
                   onChange={(e) => setLocationQuery(e.target.value)}
-                  className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-[#c20001] focus:outline-none focus:ring-1 focus:ring-[#c20001]"
+                  disabled
+                  className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm bg-gray-100 text-gray-500"
                 />
-              </Autocomplete>
+              )}
 
             </div>
 
