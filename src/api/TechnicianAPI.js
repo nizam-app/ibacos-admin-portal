@@ -42,6 +42,12 @@ const TechnicianAPI = {
     }),
   getDefaultRate: (techType) =>
     axiosClient.get(`/rates/default/${techType}`),
+
+  // Get specializations (for specialty dropdown)
+  getSpecializations: (activeOnly = true) =>
+    axiosClient.get("/specializations", {
+      params: { activeOnly },
+    }),
 };
 
 export default TechnicianAPI;

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import Swal from "sweetalert2";
+import TechnicianAPI from "../../api/TechnicianAPI";
 
 // ------------ Icon components (same as TSX, but JS) ------------
 const Briefcase = ({ className }) => (
@@ -185,18 +186,25 @@ export default function AddEditTechnicianModal({
   const [initialData, setInitialData] = useState(formData);
   const [hasChanges, setHasChanges] = useState(false);
 
+  // Specializations from API
+  const [specializations, setSpecializations] = useState([]);
+  const [loadingSpecializations, setLoadingSpecializations] = useState(false);
+
   // Compensation Override State (Admin only)
   const [useCompensationOverride, setUseCompensationOverride] = useState(false);
   const [overrideCommissionRate, setOverrideCommissionRate] = useState("");
   const [overrideSalary, setOverrideSalary] = useState("");
   const [overrideBonusRate, setOverrideBonusRate] = useState("");
   const [compensationErrors, setCompensationErrors] = useState({});
+  const [phoneError, setPhoneError] = useState("");
 
   // Additional Information
   const [isAdditionalInfoOpen, setIsAdditionalInfoOpen] = useState(false);
   const [personalPhoto, setPersonalPhoto] = useState(null);
   const [personalPhotoPreview, setPersonalPhotoPreview] = useState(null);
+  const [existingPhotoUrl, setExistingPhotoUrl] = useState(null);
   const [idDocument, setIdDocument] = useState(null);
+  const [existingIdCardUrl, setExistingIdCardUrl] = useState(null);
   const [isForeigner, setIsForeigner] = useState(false);
   const [residencePermit, setResidencePermit] = useState(null);
   const [permitValidFrom, setPermitValidFrom] = useState("");
@@ -204,6 +212,7 @@ export default function AddEditTechnicianModal({
   const [homeAddress, setHomeAddress] = useState("");
   const [academicTitle, setAcademicTitle] = useState("");
   const [certificates, setCertificates] = useState([]);
+  const [existingCertificatesUrls, setExistingCertificatesUrls] = useState([]);
   const [fileErrors, setFileErrors] = useState({});
 
     // 🔹 Global values: API theke asle oita use, na ashley fallback
@@ -212,13 +221,84 @@ export default function AddEditTechnicianModal({
   const GLOBAL_BONUS_RATE = defaultInternalBonusRate ?? 5;      // %
 
 
+  // ---------- Phone validation ----------
+  const validatePhone = (phone) => {
+    // Remove any non-digit characters
+    const digitsOnly = phone.replace(/\D/g, "");
+    
+    // Check if it's exactly 8 digits
+    if (digitsOnly.length !== 8) {
+      return "Phone number must be exactly 8 digits";
+    }
+    
+    // Check if it starts with 2, 3, or 4
+    const firstDigit = digitsOnly[0];
+    if (!["2", "3", "4"].includes(firstDigit)) {
+      return "Phone number must start with 2, 3, or 4";
+    }
+    
+    return "";
+  };
+
+  const handlePhoneChange = (e) => {
+    const value = e.target.value;
+    // Only allow digits
+    const digitsOnly = value.replace(/\D/g, "");
+    // Limit to 8 digits
+    const limitedValue = digitsOnly.slice(0, 8);
+    
+    setFormData({ ...formData, phone: limitedValue });
+    
+    // Validate and set error
+    if (limitedValue.length > 0) {
+      const error = validatePhone(limitedValue);
+      setPhoneError(error);
+    } else {
+      setPhoneError("");
+    }
+  };
+
   // ---------- Effects ----------
+  // Fetch specializations when modal opens
+  useEffect(() => {
+    if (isOpen) {
+      const fetchSpecializations = async () => {
+        try {
+          setLoadingSpecializations(true);
+          const response = await TechnicianAPI.getSpecializations(true);
+          // Handle response structure: { success: true, data: [...] }
+          const data = response.data?.data || response.data || [];
+          setSpecializations(Array.isArray(data) ? data : []);
+        } catch (err) {
+          console.error("Failed to load specializations", err);
+          Swal.fire({
+            icon: "warning",
+            title: "Failed to load specializations",
+            text: "Please refresh the page or try again later.",
+            timer: 3000,
+            showConfirmButton: false,
+          });
+          setSpecializations([]);
+        } finally {
+          setLoadingSpecializations(false);
+        }
+      };
+
+      fetchSpecializations();
+    }
+  }, [isOpen]);
+
   useEffect(() => {
     if (technician) {
+      // Normalize phone number - extract only digits
+      const normalizedPhone = technician.phone
+        ? technician.phone.replace(/\D/g, "").slice(0, 8)
+        : "";
+      
       const data = {
         name: technician.name,
         specialty: technician.specialty,
-        phone: technician.phone,
+        phone: normalizedPhone,
         email: technician.email,
         employmentType: technician.employmentType,
         status: technician.status,
@@ -227,6 +307,45 @@ export default function AddEditTechnicianModal({
       };
       setFormData(data);
       setInitialData(data);
+      
+      // Validate existing phone if present
+      if (normalizedPhone) {
+        const error = validatePhone(normalizedPhone);
+        setPhoneError(error);
+      }
+
+      // Load existing document URLs
+      if (technician.photoUrl) {
+        setExistingPhotoUrl(technician.photoUrl);
+      }
+      if (technician.idCardUrl) {
+        setExistingIdCardUrl(technician.idCardUrl);
+      }
+      if (technician.degreesUrl) {
+        // Handle both array and single URL
+        const degrees = Array.isArray(technician.degreesUrl)
+          ? technician.degreesUrl
+          : [technician.degreesUrl].filter(Boolean);
+        setExistingCertificatesUrls(degrees);
+      }
+      if (technician.homeAddress) {
+        setHomeAddress(technician.homeAddress);
+      }
+      if (technician.academicTitle) {
+        setAcademicTitle(technician.academicTitle);
+      }
+      if (technician.isForeigner) {
+        setIsForeigner(technician.isForeigner);
+      }
+      if (technician.residencePermitUrl) {
+        // We'll show the existing permit URL if available
+      }
+      if (technician.residencePermitFrom) {
+        setPermitValidFrom(technician.residencePermitFrom);
+      }
+      if (technician.residencePermitTo) {
+        setPermitValidTo(technician.residencePermitTo);
+      }
 
       if (technician.hasCompensationOverride) {
         setUseCompensationOverride(true);
@@ -284,6 +403,7 @@ export default function AddEditTechnicianModal({
 
     setFileErrors((prev) => ({ ...prev, photo: "" }));
     setPersonalPhoto(file);
+    setExistingPhotoUrl(null); // Clear existing URL when new file is uploaded
 
     const reader = new FileReader();
     reader.onloadend = () => setPersonalPhotoPreview(reader.result);
@@ -312,6 +432,7 @@ export default function AddEditTechnicianModal({
 
     setFileErrors((prev) => ({ ...prev, idDoc: "" }));
     setIdDocument(file);
+    setExistingIdCardUrl(null); // Clear existing URL when new file is uploaded
   };
 
   const handleResidencePermitUpload = (e) => {
@@ -422,6 +543,18 @@ export default function AddEditTechnicianModal({
       });
       return;
     }
+
+    // Validate phone number
+    const phoneValidationError = validatePhone(formData.phone);
+    if (phoneValidationError) {
+      setPhoneError(phoneValidationError);
+      Swal.fire({
+        icon: "error",
+        title: "Invalid phone number",
+        text: phoneValidationError,
+      });
+      return;
+    }
     // ✅ NEW – only for create
     if (!technician) {
       if (!formData.password || formData.password.trim().length < 6) {
@@ -495,50 +628,68 @@ export default function AddEditTechnicianModal({
       }
     }
 
+    // handleSubmit er vitore, data create howar pore:
+
+    const hasDocs =
+      personalPhoto ||
+      idDocument ||
+      (isForeigner && residencePermit) ||
+      certificates.length > 0 ||
+      existingPhotoUrl ||
+      existingIdCardUrl ||
+      existingCertificatesUrls.length > 0;
+
+    if (hasDocs) {
+      const formDataDocs = new FormData();
+
+      // New files take priority over existing URLs
+      if (personalPhoto) {
+        formDataDocs.append("photoUrl", personalPhoto);
+      } else if (existingPhotoUrl && !personalPhoto) {
+        // Keep existing photo if no new one is uploaded
+        // Backend should handle this, but we can pass the URL if needed
+        data.photoUrl = existingPhotoUrl;
+      }
+
+      if (idDocument) {
+        formDataDocs.append("idCardUrl", idDocument);
+      } else if (existingIdCardUrl && !idDocument) {
+        // Keep existing ID card if no new one is uploaded
+        data.idCardUrl = existingIdCardUrl;
+      }
+
+      if (isForeigner && residencePermit) {
+        formDataDocs.append("residencePermitUrl", residencePermit);
+      }
+      
+      if (certificates.length > 0) {
+        certificates.forEach((file) => {
+          formDataDocs.append("degreesUrl", file);
+        });
+      }
+      
+      // Include existing certificates URLs if no new ones are uploaded
+      if (certificates.length === 0 && existingCertificatesUrls.length > 0) {
+        data.degreesUrl = existingCertificatesUrls;
+      }
+
+      // optional: jodi date pathate chao
+      if (isForeigner && permitValidFrom) {
+        formDataDocs.append("residencePermitFrom", permitValidFrom);
+      }
+      if (isForeigner && permitValidTo) {
+        formDataDocs.append("residencePermitTo", permitValidTo);
+      }
+
+      // ✅ onSave-e pathanor jonno
+      data.documentsFormData = formDataDocs;
+    }
+
     Swal.fire({
       icon: "success",
       title: technician ? "Technician updated" : "Technician added",
       text: "This is demo data – integrate your API here.",
     });
-
-    // handleSubmit er vitore, data create howar pore:
-
-const hasDocs =
-  personalPhoto ||
-  idDocument ||
-  (isForeigner && residencePermit) ||
-  certificates.length > 0;
-
-if (hasDocs) {
-  const formDataDocs = new FormData();
-
-  if (personalPhoto) {
-    formDataDocs.append("photoUrl", personalPhoto);
-  }
-  if (idDocument) {
-    formDataDocs.append("idCardUrl", idDocument);
-  }
-  if (isForeigner && residencePermit) {
-    formDataDocs.append("residencePermitUrl", residencePermit);
-  }
-  if (certificates.length > 0) {
-    certificates.forEach((file) => {
-      formDataDocs.append("degreesUrl", file);
-    });
-  }
-
-  // optional: jodi date pathate chao
-  if (isForeigner && permitValidFrom) {
-    formDataDocs.append("residencePermitFrom", permitValidFrom);
-  }
-  if (isForeigner && permitValidTo) {
-    formDataDocs.append("residencePermitTo", permitValidTo);
-  }
-
-  // ✅ onSave-e pathanor jonno
-  data.documentsFormData = formDataDocs;
-}
-
 
     if (onSave) onSave(data);
   };
@@ -558,7 +709,9 @@ if (hasDocs) {
     setIsAdditionalInfoOpen(false);
     setPersonalPhoto(null);
     setPersonalPhotoPreview(null);
+    setExistingPhotoUrl(null);
     setIdDocument(null);
+    setExistingIdCardUrl(null);
     setIsForeigner(false);
     setResidencePermit(null);
     setPermitValidFrom("");
@@ -566,8 +719,10 @@ if (hasDocs) {
     setHomeAddress("");
     setAcademicTitle("");
     setCertificates([]);
+    setExistingCertificatesUrls([]);
     setFileErrors({});
     setCompensationErrors({});
+    setPhoneError("");
     setUseCompensationOverride(false);
 
     if (onClose) onClose();
@@ -587,11 +742,11 @@ if (hasDocs) {
             <h2 className="text-lg font-semibold text-gray-900">
               {technician ? "Edit Technician" : "Add New Technician"}
             </h2>
-            <p className="text-sm text-gray-600">
-              {technician
-                ? "Update basic information (name, phone, email, specialty). Compensation and employment type can only be changed by Admin."
-                : "Enter technician details and select employment type."}
-            </p>
+            {!technician && (
+              <p className="text-sm text-gray-600">
+                Enter technician details and select employment type.
+              </p>
+            )}
           </div>
           <button
             type="button"
@@ -632,16 +787,36 @@ if (hasDocs) {
                   onChange={(e) =>
                     setFormData({ ...formData, specialty: e.target.value })
                   }
-                  className="mt-1 block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-[#c20001] focus:border-[#c20001]"
+                  disabled={loadingSpecializations}
+                  className="mt-1 block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-[#c20001] focus:border-[#c20001] disabled:bg-gray-100 disabled:cursor-not-allowed"
+                  required
                 >
-                  <option value="">Select specialty</option>
-                  <option value="Electrical">Electrical</option>
-                  <option value="Plumbing">Plumbing</option>
-                  <option value="HVAC">HVAC</option>
-                  <option value="General">General</option>
-                  <option value="Carpentry">Carpentry</option>
-                  <option value="Painting">Painting</option>
+                  <option value="">
+                    {loadingSpecializations
+                      ? "Loading specializations..."
+                      : "Select specialty"}
+                  </option>
+                  {/* Show current specialty even if not in active list (for editing) */}
+                  {technician &&
+                    formData.specialty &&
+                    !specializations.some(
+                      (spec) => spec.name === formData.specialty
+                    ) && (
+                      <option value={formData.specialty}>
+                        {formData.specialty} (Currently inactive)
+                      </option>
+                    )}
+                  {specializations.map((spec) => (
+                    <option key={spec.id} value={spec.name}>
+                      {spec.name}
+                    </option>
+                  ))}
                 </select>
+                {loadingSpecializations && (
+                  <p className="text-xs text-gray-500 mt-1">
+                    Loading specializations...
+                  </p>
+                )}
               </div>
 
               <div>
@@ -650,12 +825,20 @@ if (hasDocs) {
                   id="phone"
                   type="tel"
                   value={formData.phone}
-                  onChange={(e) =>
-                    setFormData({ ...formData, phone: e.target.value })
-                  }
-                  placeholder="+971 50 123 4567"
+                  onChange={handlePhoneChange}
+                  placeholder="23456789"
+                  maxLength={8}
                   required
+                  className={phoneError ? "border-red-500" : ""}
                 />
+                {phoneError && (
+                  <p className="text-xs text-red-600 mt-1">{phoneError}</p>
+                )}
+                {!phoneError && formData.phone.length > 0 && (
+                  <p className="text-xs text-gray-500 mt-1">
+                    Enter 8 digits starting with 2, 3, or 4
+                  </p>
+                )}
               </div>
 
               <div>
@@ -1087,6 +1270,27 @@ if (hasDocs) {
                           Remove
                         </button>
                       </div>
+                    ) : existingPhotoUrl ? (
+                      <div className="flex items-center gap-4">
+                        <img
+                          src={existingPhotoUrl}
+                          alt="Current photo"
+                          className="w-20 h-20 rounded-lg object-cover border-2 border-gray-200"
+                        />
+                        <div className="flex flex-col gap-2">
+                          <span className="text-xs text-gray-500">Current photo</span>
+                          <label className="inline-flex items-center text-xs px-3 py-1.5 rounded-full border border-[#c20001] text-[#c20001] hover:bg-[#c20001]/10 cursor-pointer">
+                            <Upload className="w-3 h-3 mr-1" />
+                            Replace
+                            <input
+                              type="file"
+                              accept=".jpg,.jpeg,.png,.webp"
+                              onChange={handlePhotoUpload}
+                              className="hidden"
+                            />
+                          </label>
+                        </div>
+                      </div>
                     ) : (
                       <div>
                         <label className="flex items-center justify-center w-full h-32 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:border-[#c20001] hover:bg-gray-50 transition-colors">
@@ -1142,6 +1346,37 @@ if (hasDocs) {
                         >
                           <X className="w-4 h-4" />
                         </button>
+                      </div>
+                    ) : existingIdCardUrl ? (
+                      <div className="flex items-center justify-between p-3 bg-gray-50 border border-gray-200 rounded-lg">
+                        <div className="flex items-center gap-2">
+                          {existingIdCardUrl.toLowerCase().endsWith('.pdf') ? (
+                            <FileText className="w-5 h-5 text-red-600" />
+                          ) : (
+                            <ImageIcon className="w-5 h-5 text-blue-600" />
+                          )}
+                          <div>
+                            <p className="text-sm">Current ID Document</p>
+                            <a
+                              href={existingIdCardUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-xs text-[#c20001] hover:underline"
+                            >
+                              View document
+                            </a>
+                          </div>
+                        </div>
+                        <label className="inline-flex items-center text-xs px-3 py-1.5 rounded-full border border-[#c20001] text-[#c20001] hover:bg-[#c20001]/10 cursor-pointer">
+                          <Upload className="w-3 h-3 mr-1" />
+                          Replace
+                          <input
+                            type="file"
+                            accept=".jpg,.jpeg,.png,.pdf"
+                            onChange={handleIdDocumentUpload}
+                            className="hidden"
+                          />
+                        </label>
                       </div>
                     ) : (
                       <div>
@@ -1306,11 +1541,44 @@ if (hasDocs) {
                 <div>
                   <Label>Degrees / Certificates</Label>
                   <div className="mt-2 space-y-3">
+                    {/* Existing certificates */}
+                    {existingCertificatesUrls.length > 0 && (
+                      <div className="space-y-2">
+                        {existingCertificatesUrls.map((url, index) => (
+                          <div
+                            key={`existing-${index}`}
+                            className="flex items-center justify-between p-3 bg-blue-50 border border-blue-200 rounded-lg"
+                          >
+                            <div className="flex items-center gap-2">
+                              {url.toLowerCase().endsWith('.pdf') ? (
+                                <FileText className="w-5 h-5 text-red-600" />
+                              ) : (
+                                <ImageIcon className="w-5 h-5 text-blue-600" />
+                              )}
+                              <div>
+                                <p className="text-sm">Certificate {index + 1}</p>
+                                <a
+                                  href={url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-xs text-[#c20001] hover:underline"
+                                >
+                                  View document
+                                </a>
+                              </div>
+                            </div>
+                            <span className="text-xs text-gray-500">Existing</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* New certificates being uploaded */}
                     {certificates.length > 0 && (
                       <div className="space-y-2">
                         {certificates.map((file, index) => (
                           <div
-                            key={index}
+                            key={`new-${index}`}
                             className="flex items-center justify-between p-3 bg-gray-50 border border-gray-200 rounded-lg"
                           >
                             <div className="flex items-center gap-2">
@@ -1338,7 +1606,7 @@ if (hasDocs) {
                       </div>
                     )}
 
-                    {certificates.length < 5 && (
+                    {certificates.length + existingCertificatesUrls.length < 5 && (
                       <div>
                         <label className="flex items-center justify-center w-full h-24 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:border-[#c20001] hover:bg-gray-50 transition-colors">
                           <div className="text-center">
@@ -1348,7 +1616,7 @@ if (hasDocs) {
                             </p>
                             <p className="text-xs text-gray-500 mt-1">
                               .jpg, .png, .pdf • Max 5 files, 4MB each (
-                              {certificates.length}/5 uploaded)
+                              {certificates.length + existingCertificatesUrls.length}/5 uploaded)
                             </p>
                           </div>
                           <input

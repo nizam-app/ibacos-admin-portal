@@ -7,6 +7,7 @@ import {
   DollarSign,
   Users,
   LogOut,
+  Briefcase,
 } from "lucide-react";
 import { logoutApi } from "../../api/authApi";
 import Swal from "sweetalert2";
@@ -106,6 +107,11 @@ const DispatcherSidebar = () => {
         <NavLink to="/dispatcher/technicians" className={getLinkClasses}>
           <Users className="h-4 w-4 " />
           <span>Technicians</span>
+        </NavLink>
+
+        <NavLink to="/dispatcher/specializations" className={getLinkClasses}>
+          <Briefcase className="h-4 w-4" />
+          <span>Specializations</span>
         </NavLink>
         <div className="border-t border-gray-300 pt-4">
           <a

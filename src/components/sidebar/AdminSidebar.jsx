@@ -14,6 +14,7 @@ import {
   Percent,
   LogOut,
   Users2,
+  Briefcase,
 } from "lucide-react";
 import Swal from "sweetalert2";
 import { logoutApi } from "../../api/authApi";
@@ -143,6 +144,11 @@ const AdminSidebar = () => {
         <NavLink to="/admin/customer-management" className={getLinkClasses}>
           <Users2 className="h-4 w-4" />
           <span>Customers Management</span>
+        </NavLink>
+
+        <NavLink to="/admin/specializations" className={getLinkClasses}>
+          <Briefcase className="h-4 w-4" />
+          <span>Specializations</span>
         </NavLink>
       </div>
 

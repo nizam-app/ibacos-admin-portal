@@ -54,6 +54,7 @@ function ServiceRequestForm() {
   const [pinPlaced, setPinPlaced] = useState(true);
   const [searchLoading, setSearchLoading] = useState(false);
   const [searchError, setSearchError] = useState("");
+  const [phoneError, setPhoneError] = useState("");
 
   // ---- meta: category / service / subservice ----
   const [categories, setCategories] = useState([]);
@@ -68,6 +69,43 @@ function ServiceRequestForm() {
 
   // helper
   const normalizePhone = (phone) => phone.replace(/\D/g, "");
+
+  // ---------- Phone validation ----------
+  const validatePhone = (phone) => {
+    // Remove any non-digit characters
+    const digitsOnly = phone.replace(/\D/g, "");
+    
+    // Check if it's exactly 8 digits
+    if (digitsOnly.length !== 8) {
+      return "Phone number must be exactly 8 digits";
+    }
+    
+    // Check if it starts with 2, 3, or 4
+    const firstDigit = digitsOnly[0];
+    if (!["2", "3", "4"].includes(firstDigit)) {
+      return "Phone number must start with 2, 3, or 4";
+    }
+    
+    return "";
+  };
+
+  const handlePhoneChange = (e) => {
+    const value = e.target.value;
+    // Only allow digits
+    const digitsOnly = value.replace(/\D/g, "");
+    // Limit to 8 digits
+    const limitedValue = digitsOnly.slice(0, 8);
+    
+    setFormData((prev) => ({ ...prev, phone: limitedValue }));
+    
+    // Validate and set error
+    if (limitedValue.length > 0) {
+      const error = validatePhone(limitedValue);
+      setPhoneError(error);
+    } else {
+      setPhoneError("");
+    }
+  };
 
   const buildFullAddress = (data) => {
     const parts = [data.address, data.city, data.landmark]
@@ -304,6 +342,7 @@ function ServiceRequestForm() {
     setSaveAsDefaultAddress(false);
     setShowNewCustomerForm(false);
     setPinPlaced(true);
+    setPhoneError("");
   };
 
   const handleSubmit = async (e) => {
@@ -318,6 +357,14 @@ function ServiceRequestForm() {
 
     if (!formData.phone) {
       setGlobalError("Phone number is required.");
+      return;
+    }
+
+    // Validate phone number
+    const phoneValidationError = validatePhone(formData.phone);
+    if (phoneValidationError) {
+      setPhoneError(phoneValidationError);
+      setGlobalError(phoneValidationError);
       return;
     }
     if (!formData.preferredDate || !formData.preferredTime) {
@@ -491,15 +538,26 @@ function ServiceRequestForm() {
                 <input
                   id="phone"
                   type="tel"
-                  placeholder="Enter phone number to search customer..."
-                  className="w-full rounded-lg border border-gray-300 bg-gray-50 px-3 py-2 text-sm focus:outline-none focus:ring-[1px] focus:ring-[#ffb111] focus:border-[#ffb111]"
+                  placeholder="23456789"
+                  maxLength={8}
+                  className={`w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-[1px] focus:ring-[#ffb111] focus:border-[#ffb111] ${
+                    phoneError
+                      ? "border-red-500 bg-red-50"
+                      : "border-gray-300 bg-gray-50"
+                  }`}
                   value={formData.phone}
-                  onChange={(e) =>
-                    setFormData((prev) => ({ ...prev, phone: e.target.value }))
-                  }
+                  onChange={handlePhoneChange}
                   required
                 />
 
+                {phoneError && (
+                  <p className="text-xs text-red-600 mt-1">{phoneError}</p>
+                )}
+                {!phoneError && formData.phone.length > 0 && (
+                  <p className="text-xs text-gray-500 mt-1">
+                    Enter 8 digits starting with 2, 3, or 4
+                  </p>
+                )}
                 {searchLoading && (
                   <p className="text-xs text-gray-500">
                     Searching customer...

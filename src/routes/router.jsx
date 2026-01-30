@@ -32,6 +32,7 @@ import AdminCategoriesManagementPage from "../pages/administrator/AdminCategorie
 import AdminCommissionRatesPage from "../pages/administrator/AdminCommissionRatesPage";
 import TechnicianOnlineMapView from "../pages/dispatcher/TechnicianOnlineMapView";
 import AdminCustomerManagement from "../pages/administrator/AdminCustomerManagement";
+import AdminSpecializationsManagementPage from "../pages/administrator/AdminSpecializationsManagementPage";
 
 const Router = createBrowserRouter([
   {
@@ -78,6 +79,7 @@ const Router = createBrowserRouter([
       { path: "work-orders", element: <DispatcherWorkOrders></DispatcherWorkOrders> },
       { path: "payments", element: <AdminPaymentsPage></AdminPaymentsPage> },
       { path: "technicians", element: <DispatcherTechnicians /> },
+      { path: "specializations", element: <AdminSpecializationsManagementPage /> },
     ],
   },
   { 
@@ -110,6 +112,7 @@ const Router = createBrowserRouter([
       { path: "categories-services", element: <AdminCategoriesManagementPage/> },
       { path: "commission-bonus", element: <AdminCommissionRatesPage/> },
       { path: "customer-management", element: <AdminCustomerManagement/> },
+      { path: "specializations", element: <AdminSpecializationsManagementPage/> },
     ],
   },
 ]);

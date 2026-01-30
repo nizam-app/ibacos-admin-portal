@@ -38,14 +38,15 @@ const Dashboard = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  // ---- API: /call-center/stats ----
+  // ---- API: /call-center/dashboard/stats ----
   useEffect(() => {
     const fetchStats = async () => {
       try {
         setLoading(true);
         setError("");
 
-        const res = await axiosClient.get("/call-center/stats");
+        const res = await axiosClient.get("/call-center/dashboard/stats");
+        // Response structure: { success: true, stats: {...} }
         const stats = res.data?.stats || {};
 
         const totalServiceRequests = stats.totalServiceRequests || {};
