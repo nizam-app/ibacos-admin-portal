@@ -128,9 +128,7 @@ const DispatcherServiceRequests = () => {
       const res = await axiosClient.get("/dispatcher/technicians/nearby", {
         params: {
           latitude,
-          longitude,
-          maxDistance: 50,
-          status: "ONLINE",
+          longitude
         },
       });
 

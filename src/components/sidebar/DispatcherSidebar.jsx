@@ -32,7 +32,7 @@ const DispatcherSidebar = () => {
     // SweetAlert confirm
     const result = await Swal.fire({
       title: "Logout?",
-      text: "Are you sure you want to logout from Call Center?",
+      text: "Are you sure you want to logout from Dispatcher?",
       icon: "warning",
       showCancelButton: true,
       confirmButtonColor: "#c20001",

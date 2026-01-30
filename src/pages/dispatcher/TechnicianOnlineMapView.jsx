@@ -1,8 +1,8 @@
 // src/pages/dispatcher/TechnicianMapViewNearby.jsx
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import axiosClient from "../../api/axiosClient";
-import { GoogleMap, MarkerF, useJsApiLoader, Autocomplete } from "@react-google-maps/api";
+import { GoogleMap, MarkerF, InfoWindow, Autocomplete, useJsApiLoader } from "@react-google-maps/api";
 
 
 // ---------------------------------------------------------------------
@@ -62,14 +62,10 @@ function formatTime(timeString) {
   return d.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" });
 }
 
-function getPinColor(isOnline) {
-  return isOnline ? "#16a34a" : "#6b7280"; // green / gray
-}
-
-function getStatusBgClass(isOnline) {
-  return isOnline
-    ? "bg-green-100 text-green-800"
-    : "bg-gray-100 text-gray-700";
+function getPinColor(statusLabel) {
+  if (statusLabel === "Online") return "#16a34a"; // green
+  if (statusLabel === "Busy") return "#eab308"; // yellow
+  return "#6b7280"; // gray for offline
 }
 
 // parse specialization: হতে পারে normal string বা '["HVAC","Electrical"]'
@@ -87,46 +83,27 @@ function normalizeSpecialization(raw) {
 }
 
 const TechnicianMapViewNearby = () => {
-
-
-  const [auto, setAuto] = useState(null);
-
-  const onAutoLoad = (a) => setAuto(a);
-
-  const onPlaceChanged = () => {
-    if (!auto) return;
-    const place = auto.getPlace();
-    const loc = place?.geometry?.location;
-    if (!loc) {
-      setError("Select a suggestion from the dropdown.");
-      return;
-    }
-    const newCenter = { lat: loc.lat(), lng: loc.lng() };
-    setCenter(newCenter);
-    fetchNearbyTechnicians(newCenter.lat, newCenter.lng, radius);
-  };
-
-
-
-
   const navigate = useNavigate();
 
-  // buyer/job location (map center)
+  // job location (map center) - will be updated from API response
   const [center, setCenter] = useState({
-    lat: 23.8103, // Dhaka default
-    lng: 90.4125,
+    lat: 18.0858, // Default to Nouakchott, Mauritania coordinates
+    lng: -15.9785,
   });
 
-  const [radius, setRadius] = useState(5000); // শুধু zoom control-এর জন্য
+  const [radius, setRadius] = useState(5000); // for zoom control only
   const [locationQuery, setLocationQuery] = useState("");
+  const [autocompleteRef, setAutocompleteRef] = useState(null);
 
   const [searchQuery, setSearchQuery] = useState("");
   const [lastRefresh, setLastRefresh] = useState(new Date());
   const [totalCount, setTotalCount] = useState(0);
   const [technicianLocations, setTechnicianLocations] = useState([]);
   const [hoveredTechnician, setHoveredTechnician] = useState(null);
+  const [selectedTechnician, setSelectedTechnician] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const mapRef = useRef(null);
 
   const { isLoaded, loadError } = useJsApiLoader({
     googleMapsApiKey: import.meta.env.VITE_GOOGLE_MAPS_API_KEY,
@@ -136,25 +113,21 @@ const TechnicianMapViewNearby = () => {
   // -------------------------------------------------------------------
   // API: /api/dispatcher/technicians/nearby?latitude=&longitude=
   // -------------------------------------------------------------------
-  const fetchNearbyTechnicians = async (lat, lng, radiusMeters = radius) => {
+  const fetchNearbyTechnicians = async (lat, lng) => {
     try {
       setLoading(true);
       setError("");
-
-      const maxDistanceKm = Math.max(1, Math.round(radiusMeters / 1000)); // meters -> km
 
       const { data } = await axiosClient.get("/dispatcher/technicians/nearby", {
         params: {
           latitude: lat,
           longitude: lng,
-          maxDistance: maxDistanceKm,
-          // status: "ONLINE", // ✅ চাইলে toggle দিয়ে add করবেন, এখন remove রাখুন
         },
       });
 
       const technicians = Array.isArray(data?.technicians) ? data.technicians : [];
 
-      // ✅ jobLocation থেকে center update
+      // Update center from jobLocation in response
       if (data?.jobLocation?.latitude != null && data?.jobLocation?.longitude != null) {
         setCenter({
           lat: Number(data.jobLocation.latitude),
@@ -164,7 +137,8 @@ const TechnicianMapViewNearby = () => {
 
       const mapped = technicians.map((t) => {
         const status = String(t.locationStatus || "").toUpperCase();
-        const isOnline = status === "ONLINE";
+        // Consider ONLINE and BUSY as online/active
+        const isOnline = status === "ONLINE" || status === "BUSY";
 
         const rawLat = t.currentLocation?.latitude ?? null;
         const rawLng = t.currentLocation?.longitude ?? null;
@@ -179,7 +153,7 @@ const TechnicianMapViewNearby = () => {
           type: t.type, // INTERNAL / FREELANCER
           specialty: normalizeSpecialization(t.specialization),
           isOnline,
-          statusLabel: isOnline ? "Online" : "Offline",
+          statusLabel: status === "ONLINE" ? "Online" : status === "BUSY" ? "Busy" : "Offline",
           lat: Number.isFinite(latNum) ? latNum : null,
           lng: Number.isFinite(lngNum) ? lngNum : null,
           lastUpdated: formatTime(t.lastLocationUpdate),
@@ -210,11 +184,11 @@ const TechnicianMapViewNearby = () => {
   // auto-refresh every 30s for current center
   useEffect(() => {
     const interval = setInterval(() => {
-      fetchNearbyTechnicians(center.lat, center.lng, radius);
+      fetchNearbyTechnicians(center.lat, center.lng);
     }, 30000);
 
     return () => clearInterval(interval);
-  }, [center.lat, center.lng, radius]);
+  }, [center.lat, center.lng]);
 
 
   // technician name filter (right panel)
@@ -229,20 +203,47 @@ const TechnicianMapViewNearby = () => {
   const mapZoom =
     radius <= 2000 ? 14 : radius <= 5000 ? 13 : radius <= 10000 ? 12 : 11;
 
-  // -------------------------------------------------------------------
-  // Location search: buyer address -> geocode -> update center & reload
-  // -------------------------------------------------------------------
-  const handleSearchLocation = () => {
-    fetchNearbyTechnicians(center.lat, center.lng, radius);
-  };
-
-
   const handleRadiusChange = (e) => {
     const value = Number(e.target.value);
     if (!Number.isNaN(value) && value > 0) {
       setRadius(value);
-      fetchNearbyTechnicians(center.lat, center.lng, value); // ✅ radius -> maxDistance
+      // Radius is only used for zoom level, not for API filtering
     }
+  };
+
+  // Handle location search with Autocomplete restricted to Mauritania
+  const onPlaceChanged = () => {
+    if (autocompleteRef) {
+      const place = autocompleteRef.getPlace();
+      const location = place?.geometry?.location;
+      if (location) {
+        const newCenter = {
+          lat: location.lat(),
+          lng: location.lng(),
+        };
+        setCenter(newCenter);
+        fetchNearbyTechnicians(newCenter.lat, newCenter.lng);
+      }
+    }
+  };
+
+  // Handle technician click - center map on technician location
+  const handleTechnicianClick = (tech) => {
+    if (tech.lat != null && tech.lng != null) {
+      setSelectedTechnician(tech.id);
+      const newCenter = { lat: tech.lat, lng: tech.lng };
+      setCenter(newCenter);
+      
+      // Zoom in closer when selecting a technician
+      if (mapRef.current) {
+        mapRef.current.panTo(newCenter);
+        mapRef.current.setZoom(15);
+      }
+    }
+  };
+
+  const onMapLoad = (map) => {
+    mapRef.current = map;
   };
 
   // -------------------------------------------------------------------
@@ -280,11 +281,15 @@ const TechnicianMapViewNearby = () => {
             {error && <p className="text-xs text-red-500">{error}</p>}
           </div>
 
-          {/* Legend: Online / Offline */}
+          {/* Legend: Online / Busy / Offline */}
           <div className="flex items-center gap-4 text-xs md:text-sm">
             <div className="flex items-center gap-2">
               <div className="h-3 w-3 rounded-full bg-green-600" />
               <span className="text-gray-600">Online</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="h-3 w-3 rounded-full bg-yellow-500" />
+              <span className="text-gray-600">Busy</span>
             </div>
             <div className="flex items-center gap-2">
               <div className="h-3 w-3 rounded-full bg-gray-400" />
@@ -309,6 +314,7 @@ const TechnicianMapViewNearby = () => {
               mapContainerClassName="w-full h-full"
               center={center}
               zoom={mapZoom}
+              onLoad={onMapLoad}
               options={{
                 disableDefaultUI: true,
                 clickableIcons: false,
@@ -316,18 +322,173 @@ const TechnicianMapViewNearby = () => {
             >
               {filteredTechnicians.map((tech) =>
                 tech.lat != null && tech.lng != null ? (
-                  <MarkerF
-                    key={tech.id}
-                    position={{ lat: tech.lat, lng: tech.lng }}
-                    icon={window.google?.maps ? {
-                      path: window.google.maps.SymbolPath.CIRCLE,
-                      fillColor: getPinColor(tech.isOnline),
-                      fillOpacity: 1,
-                      strokeColor: "#ffffff",
-                      strokeWeight: 2,
-                      scale: 7,
-                    } : undefined}
-                  />
+                  <React.Fragment key={tech.id}>
+                    {/* Outer pulsing circles for selected technician */}
+                    {selectedTechnician === tech.id && window.google?.maps && (
+                      <>
+                        {/* Largest outer circle */}
+                        <MarkerF
+                          position={{ lat: tech.lat, lng: tech.lng }}
+                          icon={{
+                            path: window.google.maps.SymbolPath.CIRCLE,
+                            fillColor: "#c20001",
+                            fillOpacity: 0.15,
+                            strokeColor: "#c20001",
+                            strokeWeight: 4,
+                            scale: 25,
+                          }}
+                          zIndex={1}
+                        />
+                        {/* Medium outer circle */}
+                        <MarkerF
+                          position={{ lat: tech.lat, lng: tech.lng }}
+                          icon={{
+                            path: window.google.maps.SymbolPath.CIRCLE,
+                            fillColor: "#c20001",
+                            fillOpacity: 0.25,
+                            strokeColor: "#c20001",
+                            strokeWeight: 3,
+                            scale: 20,
+                          }}
+                          zIndex={2}
+                        />
+                        {/* Inner circle */}
+                        <MarkerF
+                          position={{ lat: tech.lat, lng: tech.lng }}
+                          icon={{
+                            path: window.google.maps.SymbolPath.CIRCLE,
+                            fillColor: "#c20001",
+                            fillOpacity: 0.35,
+                            strokeColor: "#c20001",
+                            strokeWeight: 2,
+                            scale: 16,
+                          }}
+                          zIndex={3}
+                        />
+                      </>
+                    )}
+                    {/* Main technician marker */}
+                    <MarkerF
+                      position={{ lat: tech.lat, lng: tech.lng }}
+                      icon={window.google?.maps ? {
+                        path: window.google.maps.SymbolPath.CIRCLE,
+                        fillColor: selectedTechnician === tech.id ? "#c20001" : getPinColor(tech.statusLabel),
+                        fillOpacity: selectedTechnician === tech.id ? 1 : 1,
+                        strokeColor: selectedTechnician === tech.id ? "#ffffff" : "#ffffff",
+                        strokeWeight: selectedTechnician === tech.id ? 6 : 3,
+                        scale: selectedTechnician === tech.id ? 18 : 11,
+                      } : undefined}
+                      onClick={() => handleTechnicianClick(tech)}
+                      zIndex={selectedTechnician === tech.id ? 10 : 3}
+                    />
+                    {selectedTechnician === tech.id && (
+                      <InfoWindow
+                        position={{ lat: tech.lat, lng: tech.lng }}
+                        onCloseClick={() => setSelectedTechnician(null)}
+                        options={window.google?.maps ? {
+                          pixelOffset: new window.google.maps.Size(0, -10),
+                        } : {}}
+                      >
+                        <div className="p-4 min-w-[220px]">
+                          {/* Header */}
+                          <div className="flex items-start justify-between mb-3">
+                            <div className="flex-1">
+                              <h3 className="font-bold text-[#c20001] text-base mb-1">{tech.name}</h3>
+                              <div className="flex items-center gap-2">
+                                <div
+                                  className="h-2.5 w-2.5 rounded-full"
+                                  style={{ backgroundColor: getPinColor(tech.statusLabel) }}
+                                />
+                                <span className={`text-xs font-medium px-2 py-1 rounded-full ${
+                                  tech.statusLabel === "Online"
+                                    ? "bg-green-100 text-green-800"
+                                    : tech.statusLabel === "Busy"
+                                    ? "bg-yellow-100 text-yellow-800"
+                                    : "bg-gray-100 text-gray-700"
+                                }`}>
+                                  {tech.statusLabel}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Divider */}
+                          <div className="border-t border-gray-200 my-3" />
+
+                          {/* Details */}
+                          <div className="space-y-2.5">
+                            {tech.specialty && (
+                              <div className="flex items-start gap-2">
+                                <svg className="w-4 h-4 text-gray-400 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                                </svg>
+                                <div>
+                                  <p className="text-xs text-gray-500 font-medium">Specialization</p>
+                                  <p className="text-sm text-gray-900 mt-0.5">{tech.specialty}</p>
+                                </div>
+                              </div>
+                            )}
+
+                            {tech.phone && (
+                              <div className="flex items-start gap-2">
+                                <svg className="w-4 h-4 text-gray-400 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
+                                </svg>
+                                <div>
+                                  <p className="text-xs text-gray-500 font-medium">Phone</p>
+                                  <p className="text-sm text-gray-900 mt-0.5">{tech.phone}</p>
+                                </div>
+                              </div>
+                            )}
+
+                            {tech.distanceKm && (
+                              <div className="flex items-start gap-2">
+                                <svg className="w-4 h-4 text-gray-400 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                                </svg>
+                                <div>
+                                  <p className="text-xs text-gray-500 font-medium">Distance</p>
+                                  <p className="text-sm text-gray-900 mt-0.5">
+                                    {tech.distanceKm}
+                                    {tech.estimatedTravelTime && (
+                                      <span className="text-gray-500 ml-1">• {tech.estimatedTravelTime}</span>
+                                    )}
+                                  </p>
+                                </div>
+                              </div>
+                            )}
+
+                            {tech.openJobsCount > 0 && (
+                              <div className="flex items-start gap-2">
+                                <svg className="w-4 h-4 text-gray-400 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                                </svg>
+                                <div>
+                                  <p className="text-xs text-gray-500 font-medium">Open Jobs</p>
+                                  <p className="text-sm text-gray-900 mt-0.5">{tech.openJobsCount} active job{tech.openJobsCount !== 1 ? 's' : ''}</p>
+                                </div>
+                              </div>
+                            )}
+
+                            {tech.type && (
+                              <div className="flex items-start gap-2">
+                                <svg className="w-4 h-4 text-gray-400 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                                </svg>
+                                <div>
+                                  <p className="text-xs text-gray-500 font-medium">Type</p>
+                                  <p className="text-sm text-gray-900 mt-0.5">
+                                    {tech.type === "INTERNAL" ? "Internal Employee" : "Freelancer"}
+                                  </p>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </InfoWindow>
+                    )}
+                  </React.Fragment>
                 ) : null
               )}
 
@@ -344,7 +505,7 @@ const TechnicianMapViewNearby = () => {
           <div className="absolute bottom-6 right-6 flex flex-col gap-3">
             <button
               type="button"
-              onClick={() => fetchNearbyTechnicians(center.lat, center.lng, radius)}
+              onClick={() => fetchNearbyTechnicians(center.lat, center.lng)}
               title="Refresh"
               className="flex h-12 w-12 items-center justify-center rounded-full border border-gray-300 bg-white text-gray-700 shadow-lg hover:bg-gray-50"
             >
@@ -376,23 +537,30 @@ const TechnicianMapViewNearby = () => {
             <div className="flex items-center gap-2 text-gray-900">
               <Users className="h-5 w-5" />
               <span className="text-sm font-semibold">
-                Technicians (Online {onlineCount} / {totalFilteredCount})
+                Total Technicians ({totalFilteredCount})
               </span>
 
             </div>
           </div>
 
-          {/* Location + radius controls */}
-          <div className="border-b border-gray-200 p-4 space-y-3">
+          {/* Location search - restricted to Mauritania */}
+          <div className="border-b border-gray-200 p-4">
             <div className="space-y-1">
               <label className="text-xs font-medium text-gray-700">
-                Buyer Location
+                Search Location (Mauritania only)
               </label>
               {isLoaded ? (
-                <Autocomplete onLoad={onAutoLoad} onPlaceChanged={onPlaceChanged}>
+                <Autocomplete
+                  onLoad={(autocomplete) => setAutocompleteRef(autocomplete)}
+                  onPlaceChanged={onPlaceChanged}
+                  options={{
+                    componentRestrictions: { country: "mr" }, // Restrict to Mauritania
+                    types: ["geocode", "establishment"],
+                  }}
+                >
                   <input
                     type="text"
-                    placeholder="Type address / area..."
+                    placeholder="Search location in Mauritania..."
                     value={locationQuery}
                     onChange={(e) => setLocationQuery(e.target.value)}
                     className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-[#c20001] focus:outline-none focus:ring-1 focus:ring-[#c20001]"
@@ -408,30 +576,29 @@ const TechnicianMapViewNearby = () => {
                   className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm bg-gray-100 text-gray-500"
                 />
               )}
-
+              <p className="text-xs text-gray-500 mt-1">
+                Search restricted to locations in Mauritania
+              </p>
             </div>
+          </div>
 
-            <div className="flex items-end gap-2">
-              <div className="flex-1 space-y-1">
-                <label className="text-xs font-medium text-gray-700">
-                  Radius (meters)
-                </label>
-                <input
-                  type="number"
-                  min={500}
-                  step={500}
-                  value={radius}
-                  onChange={handleRadiusChange}
-                  className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-[#c20001] focus:outline-none focus:ring-1 focus:ring-[#c20001]"
-                />
-              </div>
-              <button
-                type="button"
-                onClick={handleSearchLocation}
-                className="rounded-md bg-[#c20001] px-4 py-2 text-xs font-semibold text-white hover:bg-[#a10001]"
-              >
-                Find Techs
-              </button>
+          {/* Radius control (for zoom level only) */}
+          <div className="border-b border-gray-200 p-4">
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-gray-700">
+                Map Zoom Level (meters)
+              </label>
+              <input
+                type="number"
+                min={500}
+                step={500}
+                value={radius}
+                onChange={handleRadiusChange}
+                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-[#c20001] focus:outline-none focus:ring-1 focus:ring-[#c20001]"
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                Adjusts map zoom level only
+              </p>
             </div>
           </div>
 
@@ -460,12 +627,16 @@ const TechnicianMapViewNearby = () => {
                 filteredTechnicians.map((tech) => (
                   <div
                     key={tech.id}
-                    className={`cursor-pointer p-4 text-sm transition-colors ${hoveredTechnician === tech.id
-                      ? "bg-gray-50"
-                      : "hover:bg-gray-50"
-                      }`}
+                    className={`cursor-pointer p-4 text-sm transition-colors ${
+                      selectedTechnician === tech.id
+                        ? "bg-[#c20001]/10 border-l-4 border-[#c20001]"
+                        : hoveredTechnician === tech.id
+                        ? "bg-gray-50"
+                        : "hover:bg-gray-50"
+                    }`}
                     onMouseEnter={() => setHoveredTechnician(tech.id)}
                     onMouseLeave={() => setHoveredTechnician(null)}
+                    onClick={() => handleTechnicianClick(tech)}
                   >
                     <div className="mb-2 flex items-start justify-between">
                       <div className="flex-1">
@@ -493,17 +664,21 @@ const TechnicianMapViewNearby = () => {
                       </div>
                       <div
                         className="mt-1 h-3 w-3 rounded-full"
-                        style={{ backgroundColor: getPinColor(tech.isOnline) }}
+                        style={{ backgroundColor: getPinColor(tech.statusLabel) }}
                       />
                     </div>
 
                     <div className="flex items-center justify-between">
                       <span
-                        className={`rounded-full px-2 py-1 text-xs ${getStatusBgClass(
-                          tech.isOnline
-                        )}`}
+                        className={`rounded-full px-2 py-1 text-xs ${
+                          tech.statusLabel === "Online"
+                            ? "bg-green-100 text-green-800"
+                            : tech.statusLabel === "Busy"
+                            ? "bg-yellow-100 text-yellow-800"
+                            : "bg-gray-100 text-gray-700"
+                        }`}
                       >
-                        {tech.isOnline ? "Online" : "Offline"}
+                        {tech.statusLabel}
                       </span>
                       <span className="text-xs text-gray-400">
                         {tech.lastUpdated}

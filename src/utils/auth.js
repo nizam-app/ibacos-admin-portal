@@ -1,23 +1,18 @@
 // src/utils/auth.js
 
-const AUTH_KEY = "ibacos_auth";
-
 export const saveAuth = ({ token, user }) => {
   if (!token || !user) return;
-  localStorage.setItem(
-    AUTH_KEY,
-    JSON.stringify({
-      token,
-      user,
-    })
-  );
+  localStorage.setItem("token", token);
+  localStorage.setItem("user", JSON.stringify(user));
 };
 
 export const getAuth = () => {
   try {
-    const raw = localStorage.getItem(AUTH_KEY);
-    if (!raw) return null;
-    return JSON.parse(raw);
+    const token = localStorage.getItem("token");
+    const rawUser = localStorage.getItem("user");
+    if (!token || !rawUser) return null;
+    const user = JSON.parse(rawUser);
+    return { token, user };
   } catch (e) {
     console.error("Failed to parse auth from storage", e);
     return null;
@@ -25,15 +20,23 @@ export const getAuth = () => {
 };
 
 export const clearAuth = () => {
-  localStorage.removeItem(AUTH_KEY);
+  localStorage.removeItem("token");
+  localStorage.removeItem("user");
 };
 
 export const getUserRole = () => {
-  const auth = getAuth();
-  return auth?.user?.role || null; // CALL_CENTER | DISPATCHER | ADMIN
+  try {
+    const rawUser = localStorage.getItem("user");
+    if (!rawUser) return null;
+    const user = JSON.parse(rawUser);
+    return user?.role || null; // CALL_CENTER | DISPATCHER | ADMIN
+  } catch (e) {
+    console.error("Failed to get user role", e);
+    return null;
+  }
 };
 
 export const isAuthenticated = () => {
-  const auth = getAuth();
-  return !!auth?.token;
+  const token = localStorage.getItem("token");
+  return !!token;
 };

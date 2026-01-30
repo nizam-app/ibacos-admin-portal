@@ -17,6 +17,12 @@ const AdminUsersAPI = {
   // block / unblock
   blockUser: (id, payload) =>
     axiosClient.patch(`/admin/users/${id}/block`, payload),
+
+  // reset password
+  resetPassword: (id, newPassword) =>
+    axiosClient.post(`/admin/users/${id}/reset-password`, {
+      newPassword,
+    }),
 };
 
 export default AdminUsersAPI;

@@ -624,21 +624,79 @@ const AdminPayoutManagement = () => {
 
   const handleMarkPaid = async (batchId) => {
     try {
-      const confirm = await Swal.fire({
-        title: "Mark batch as paid?",
-        text: "This will mark the batch as PAID.",
-        icon: "question",
+      // First, collect payment information using SweetAlert2 form
+      const result = await Swal.fire({
+        title: "Mark batch as paid",
+        html: `
+          <div style="text-align: left;">
+            <label style="display: block; margin-bottom: 8px; font-weight: 500; color: #374151;">Payment Reference *</label>
+            <input id="paymentReference" class="swal2-input" placeholder="e.g. TXN123456" required>
+            
+            <label style="display: block; margin-top: 16px; margin-bottom: 8px; font-weight: 500; color: #374151;">Payment Method *</label>
+            <select id="paymentMethod" class="swal2-select" style="display: block; width: 100%; padding: 8px; margin-bottom: 16px; border: 1px solid #d1d5db; border-radius: 4px;" required>
+              <option value="">Select payment method</option>
+              <option value="Bank Transfer">Bank Transfer</option>
+              <option value="Cash">Cash</option>
+              <option value="Mobile Money">Mobile Money</option>
+              <option value="Check">Check</option>
+              <option value="Other">Other</option>
+            </select>
+            
+            <label style="display: block; margin-top: 16px; margin-bottom: 8px; font-weight: 500; color: #374151;">Notes</label>
+            <textarea id="notes" class="swal2-textarea" placeholder="e.g. Paid via company account" style="min-height: 80px;"></textarea>
+          </div>
+        `,
+        focusConfirm: false,
         showCancelButton: true,
-        confirmButtonText: "Yes, mark paid",
+        confirmButtonText: "Mark as Paid",
+        cancelButtonText: "Cancel",
+        confirmButtonColor: "#c20001",
+        cancelButtonColor: "#6b7280",
+        preConfirm: () => {
+          const paymentReference = document.getElementById("paymentReference").value.trim();
+          const paymentMethod = document.getElementById("paymentMethod").value;
+          const notes = document.getElementById("notes").value.trim();
+
+          if (!paymentReference) {
+            Swal.showValidationMessage("Payment reference is required");
+            return false;
+          }
+          if (!paymentMethod) {
+            Swal.showValidationMessage("Payment method is required");
+            return false;
+          }
+
+          return {
+            paymentReference,
+            paymentMethod,
+            notes: notes || "",
+          };
+        },
       });
-      if (!confirm.isConfirmed) return;
 
-      const { data } = await PayoutsAPI.markPaid(batchId); // ✅ আলাদা API method বানান
+      if (!result.isConfirmed || !result.value) return;
 
-      Swal.fire("Paid", data?.message || "Batch marked as paid.", "success");
+      const payload = result.value;
+
+      // Call the API with payment details
+      const { data } = await PayoutsAPI.markPaid(batchId, payload);
+
+      Swal.fire({
+        icon: "success",
+        title: "Paid",
+        text: data?.message || "Batch marked as paid successfully.",
+        confirmButtonColor: "#c20001",
+      });
+
       await loadPayoutDashboard();
     } catch (err) {
-      Swal.fire("Error", err?.response?.data?.message || "Failed to mark as paid.", "error");
+      console.error("Mark paid failed", err);
+      Swal.fire({
+        icon: "error",
+        title: "Error",
+        text: err?.response?.data?.message || "Failed to mark batch as paid. Please try again.",
+        confirmButtonColor: "#c20001",
+      });
     }
   };
 
@@ -763,14 +821,45 @@ const AdminPayoutManagement = () => {
 
       const { data } = await PayoutsAPI.getBatchDetails(batch.id);
 
-      // ধরলাম response shape: { batch, payouts: [...] }
-      // payouts item: { technicianName, employmentType, amount, commissionsCount }
+      // API response structure:
+      // { id, technician: { id, name, phone, role }, totalAmount, type, status, details: [...], summary: {...} }
+      
+      // Map employment type from role
+      const getEmploymentType = (role) => {
+        if (role === "TECH_FREELANCER") return "Freelancer";
+        if (role === "TECH_INTERNAL") return "Internal Employee";
+        return role || "—";
+      };
+
+      // Transform API response to UI format
+      const technicianName = data.technician?.name || "—";
+      const employmentType = getEmploymentType(data.technician?.role);
+      const totalAmount = data.totalAmount ?? 0;
+      const commissionsCount = data.summary?.totalCommissions ?? data.details?.length ?? 0;
+      const technicianCount = 1; // Single payout = 1 technician
+
+      // Create payout breakdown array (single item for this payout)
+      const payouts = [
+        {
+          technicianName,
+          employmentType,
+          amount: totalAmount,
+          commissionsCount,
+        },
+      ];
+
       setSelectedBatch({
         ...batch,
-        payouts: data.payouts || [],
-        commissionsCount: data.commissionsCount ?? batch.commissionsCount,
-        technicianCount: data.technicianCount ?? batch.technicianCount,
-        totalAmount: data.totalAmount ?? batch.totalAmount,
+        payouts,
+        commissionsCount,
+        technicianCount,
+        totalAmount,
+        // Additional info from API
+        type: data.type || "EARLY",
+        status: data.status || "COMPLETED",
+        processedAt: data.processedAt,
+        createdAt: data.createdAt,
+        details: data.details || [], // Store full details for potential future use
       });
     } catch (err) {
       console.error("Failed to load batch details", err);

@@ -25,9 +25,12 @@ const PayoutsAPI = {
   getHistory: () => axiosClient.get("/payouts/history"),
 
   getBatchDetails(batchId) {
-  return axiosClient.get(`/payouts/batches/${batchId}`);
-}
+    return axiosClient.get(`/payouts/batches/${batchId}`);
+  },
 
+  // Mark batch as paid
+  markPaid: (batchId, payload) =>
+    axiosClient.post(`/payouts/batches/${batchId}/mark-paid`, payload),
 };
 
 export default PayoutsAPI;

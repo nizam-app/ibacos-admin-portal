@@ -538,13 +538,70 @@ const AdminUserManagementPage = () => {
   };
 
   const handleResetPassword = async (user) => {
-    await Swal.fire({
-      icon: "info",
-      title: "Coming soon",
-      text:
-        "Password reset link sending will be implemented later once the backend endpoint is ready.",
+    if (!isAdmin) {
+      Swal.fire({
+        icon: "info",
+        title: "Access restricted",
+        text: "Only Administrators can reset user passwords.",
+        confirmButtonColor: "#c20001",
+      });
+      return;
+    }
+
+    // Prompt for new password
+    const result = await Swal.fire({
+      title: "Reset password",
+      text: `Enter a new password for ${user.name}:`,
+      input: "password",
+      inputLabel: "New password",
+      inputPlaceholder: "Enter new password",
+      inputAttributes: {
+        autocapitalize: "off",
+        autocorrect: "off",
+      },
+      showCancelButton: true,
       confirmButtonColor: "#c20001",
+      cancelButtonColor: "#6b7280",
+      confirmButtonText: "Reset password",
+      cancelButtonText: "Cancel",
+      inputValidator: (value) => {
+        if (!value) {
+          return "Please enter a password";
+        }
+        if (value.length < 6) {
+          return "Password must be at least 6 characters";
+        }
+        return null;
+      },
     });
+
+    if (!result.isConfirmed || !result.value) return;
+
+    const newPassword = result.value;
+
+    try {
+      await AdminUsersAPI.resetPassword(user.id, newPassword);
+
+      await Swal.fire({
+        icon: "success",
+        title: "Password reset",
+        text: `Password has been reset successfully for ${user.name}.`,
+        confirmButtonColor: "#c20001",
+      });
+
+      // Optionally reload users to reflect any changes
+      await loadUsers();
+    } catch (err) {
+      console.error("Reset password failed", err);
+      await Swal.fire({
+        icon: "error",
+        title: "Reset failed",
+        text:
+          err?.response?.data?.message ||
+          "Unable to reset password. Please try again.",
+        confirmButtonColor: "#c20001",
+      });
+    }
   };
 
   // --------------------------------------------------

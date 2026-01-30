@@ -352,8 +352,6 @@ export default function DispatcherWorkOrders() {
       const res = await DispatcherAPI.getNearbyTechnicians({
         latitude: lat,
         longitude: lng,
-        maxDistance: 500,
-        status: "ONLINE",
       });
 
       const data = res.data;

@@ -2,7 +2,30 @@
 
 import { Outlet } from "react-router-dom";
 
+// Helper function to get user initials
+const getUserInitials = () => {
+  try {
+    const rawUser = localStorage.getItem("user");
+    if (!rawUser) return "U";
+    const user = JSON.parse(rawUser);
+    const name = user?.name || "";
+    if (!name) return "U";
+    
+    // Get first letter of first name and first letter of last name
+    const parts = name.trim().split(/\s+/);
+    if (parts.length >= 2) {
+      return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+    }
+    return name[0].toUpperCase();
+  } catch (e) {
+    console.error("Failed to get user initials", e);
+    return "U";
+  }
+};
+
 const DashboardLayout = ({ sidebar }) => {
+  const userInitials = getUserInitials();
+
   return (
     <div className="min-h-screen flex flex-col bg-[#f5f6f8]">
       {/* TOP BAR */}
@@ -27,7 +50,7 @@ const DashboardLayout = ({ sidebar }) => {
           </div>
 
           <div className="w-9 h-9 rounded-full bg-[#c20001] text-white flex items-center justify-center text-sm font-semibold">
-            CA
+            {userInitials}
           </div>
         </div>
       </header>

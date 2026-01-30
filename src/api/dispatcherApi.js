@@ -27,11 +27,9 @@ const DispatcherAPI = {
   getNearbyTechnicians: ({
     latitude,
     longitude,
-    maxDistance = 50,
-    status = "ONLINE",
   }) =>
     axiosClient.get("/dispatcher/technicians/nearby", {
-      params: { latitude, longitude, maxDistance, status },
+      params: { latitude, longitude},
     }),
 
   // 🔹 NEW: Work order audit trail (Admin only)
