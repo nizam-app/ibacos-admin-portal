@@ -220,6 +220,7 @@ const AdminUserManagementPage = () => {
     role: "Call Center Agent",
     password: "",
   });
+  const [phoneError, setPhoneError] = useState("");
 
   // Current logged-in user role (for permissions)
   let isAdmin = false;
@@ -338,6 +339,45 @@ const AdminUserManagementPage = () => {
     );
 
   // --------------------------------------------------
+  // Phone validation
+  // --------------------------------------------------
+  const validatePhone = (phone) => {
+    // Remove any non-digit characters
+    const digitsOnly = phone.replace(/\D/g, "");
+    
+    // Check if it's exactly 8 digits
+    if (digitsOnly.length !== 8) {
+      return "Phone number must be exactly 8 digits";
+    }
+    
+    // Check if it starts with 2, 3, or 4
+    const firstDigit = digitsOnly[0];
+    if (!["2", "3", "4"].includes(firstDigit)) {
+      return "Phone number must start with 2, 3, or 4";
+    }
+    
+    return "";
+  };
+
+  const handlePhoneChange = (e) => {
+    const value = e.target.value;
+    // Only allow digits
+    const digitsOnly = value.replace(/\D/g, "");
+    // Limit to 8 digits
+    const limitedValue = digitsOnly.slice(0, 8);
+    
+    setFormData((prev) => ({ ...prev, phone: limitedValue }));
+    
+    // Validate and set error
+    if (limitedValue.length > 0) {
+      const error = validatePhone(limitedValue);
+      setPhoneError(error);
+    } else {
+      setPhoneError("");
+    }
+  };
+
+  // --------------------------------------------------
   // Actions
   // --------------------------------------------------
   const openAddModal = () => {
@@ -359,6 +399,7 @@ const AdminUserManagementPage = () => {
       role: "Call Center Agent",
       password: "",
     });
+    setPhoneError("");
     setIsModalOpen(true);
   };
 
@@ -374,13 +415,26 @@ const AdminUserManagementPage = () => {
     }
 
     setEditingUser(user);
+    // Normalize phone number - extract only digits
+    const normalizedPhone = user.phone
+      ? user.phone.replace(/\D/g, "").slice(0, 8)
+      : "";
+    
     setFormData({
       name: user.name,
       email: user.email,
-      phone: user.phone,
+      phone: normalizedPhone,
       role: user.role,
       password: "",
     });
+    
+    // Validate existing phone if present
+    if (normalizedPhone) {
+      const error = validatePhone(normalizedPhone);
+      setPhoneError(error);
+    } else {
+      setPhoneError("");
+    }
     setIsModalOpen(true);
   };
 
@@ -390,6 +444,19 @@ const AdminUserManagementPage = () => {
         icon: "error",
         title: "Missing fields",
         text: "Please fill in name and phone.",
+        confirmButtonColor: "#c20001",
+      });
+      return;
+    }
+
+    // Validate phone number
+    const phoneValidationError = validatePhone(formData.phone);
+    if (phoneValidationError) {
+      setPhoneError(phoneValidationError);
+      await Swal.fire({
+        icon: "error",
+        title: "Invalid phone number",
+        text: phoneValidationError,
         confirmButtonColor: "#c20001",
       });
       return;
@@ -855,14 +922,19 @@ const AdminUserManagementPage = () => {
               id="phone"
               type="tel"
               value={formData.phone}
-              onChange={(e) =>
-                setFormData((prev) => ({
-                  ...prev,
-                  phone: e.target.value,
-                }))
-              }
-              placeholder="+971 50 123 4567"
+              onChange={handlePhoneChange}
+              placeholder="23456789"
+              maxLength={8}
+              className={phoneError ? "border-red-500" : ""}
             />
+            {phoneError && (
+              <p className="text-xs text-red-600 mt-1">{phoneError}</p>
+            )}
+            {!phoneError && formData.phone.length > 0 && (
+              <p className="text-xs text-gray-500 mt-1">
+                Enter 8 digits starting with 2, 3, or 4
+              </p>
+            )}
           </div>
           <div>
             <Label htmlFor="role">Role *</Label>
