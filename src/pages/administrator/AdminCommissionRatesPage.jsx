@@ -11,6 +11,7 @@ import {
   Star,
 } from "lucide-react";
 import RatesAPI from "../../api/ratesApi";
+import SystemConfigAPI from "../../api/systemConfigApi";
 
 // ---------------------------------------------------------
 // Small Tailwind UI helpers (no shadcn imports)
@@ -223,6 +224,11 @@ const AdminCommissionRatesPage = () => {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
+  // Global base salary (internal employees) – from system config
+  const [baseSalaryValue, setBaseSalaryValue] = useState("");
+  const [baseSalarySaving, setBaseSalarySaving] = useState(false);
+  const [baseSalaryLoading, setBaseSalaryLoading] = useState(true);
+
   // -----------------------------------------------------
   // Load summary + all rates from backend
   // -----------------------------------------------------
@@ -273,9 +279,65 @@ const AdminCommissionRatesPage = () => {
     }
   };
 
+  const loadSystemConfig = async () => {
+    try {
+      setBaseSalaryLoading(true);
+      const res = await SystemConfigAPI.getConfig();
+      const config = res.data?.config ?? res.data ?? {};
+      const salary = config.internalEmployeeBaseSalary;
+      setBaseSalaryValue(
+        salary != null ? String(salary) : ""
+      );
+    } catch (err) {
+      console.error("Failed to load system config", err);
+      setBaseSalaryValue("");
+    } finally {
+      setBaseSalaryLoading(false);
+    }
+  };
+
+  const handleSaveBaseSalary = async () => {
+    const val = parseFloat(baseSalaryValue);
+    if (Number.isNaN(val) || val < 0) {
+      await Swal.fire({
+        icon: "error",
+        title: "Invalid amount",
+        text: "Please enter a valid positive number for base salary.",
+        confirmButtonColor: "#c20001",
+      });
+      return;
+    }
+
+    try {
+      setBaseSalarySaving(true);
+      await SystemConfigAPI.updateConfig({
+        internalEmployeeBaseSalary: val,
+      });
+      await Swal.fire({
+        icon: "success",
+        title: "Base salary updated",
+        text: "Global base salary for internal employees has been saved.",
+        confirmButtonColor: "#c20001",
+      });
+    } catch (err) {
+      console.error("Failed to update base salary", err);
+      await Swal.fire({
+        icon: "error",
+        title: "Failed to update",
+        text:
+          err?.response?.data?.message ||
+          "Something went wrong while saving the base salary.",
+        confirmButtonColor: "#c20001",
+      });
+    } finally {
+      setBaseSalarySaving(false);
+    }
+  };
+
   useEffect(() => {
     loadSummary();
     loadRates();
+    loadSystemConfig();
   }, []);
 
   // -----------------------------------------------------
@@ -851,6 +913,48 @@ const AdminCommissionRatesPage = () => {
               ))
             )}
           </div>
+        </CardContent>
+      </Card>
+
+      {/* Global Base Salary (Internal Employees) */}
+      <Card>
+        <CardHeader>
+          <div>
+            <div className="flex items-center gap-2 mb-1">
+              <DollarSign className="w-5 h-5 text-blue-600" />
+              <CardTitle>Global Base Salary (Internal Employees)</CardTitle>
+            </div>
+            <CardDescription>
+              Default monthly base salary applied to internal employees. Individual overrides can be set when editing a technician.
+            </CardDescription>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className="flex flex-col sm:flex-row items-start sm:items-end gap-4 max-w-md">
+            <div className="flex-1 w-full sm:max-w-[200px]">
+              <Label htmlFor="base-salary">Base Salary ($)</Label>
+              <Input
+                id="base-salary"
+                type="number"
+                min="0"
+                step="1"
+                placeholder="e.g. 5000"
+                value={baseSalaryValue}
+                onChange={(e) => setBaseSalaryValue(e.target.value)}
+                disabled={baseSalaryLoading}
+                className="mt-1"
+              />
+            </div>
+            <Button
+              onClick={handleSaveBaseSalary}
+              disabled={baseSalarySaving || baseSalaryLoading}
+            >
+              {baseSalarySaving ? "Saving..." : "Save"}
+            </Button>
+          </div>
+          {baseSalaryLoading && (
+            <p className="text-xs text-gray-500 mt-2">Loading...</p>
+          )}
         </CardContent>
       </Card>
 

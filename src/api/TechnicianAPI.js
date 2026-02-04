@@ -17,22 +17,22 @@ const TechnicianAPI = {
   // Single technician details
   getDetails: (id) => axiosClient.get(`/technicians/${id}`),
 
-  // Create new technician
-  createTechnician: (body) => axiosClient.post("/technicians", body),
+  // Create new technician (accepts plain object for JSON or FormData for file uploads)
+  createTechnician: (body) => {
+    if (body instanceof FormData) {
+      // Let axios set Content-Type with boundary automatically
+      return axiosClient.post("/technicians", body);
+    }
+    return axiosClient.post("/technicians", body);
+  },
 
-  // Update technician basic info / compensation
-  updateTechnician: (id, body) =>
-    axiosClient.patch(`/technicians/${id}`, body),
-
-  // Block / unblock
-  blockTechnician: (id, body) =>
-    axiosClient.patch(`/technicians/${id}/block`, body),
-
-  // Upload documents (photo, ID, residence permit, degrees)
-  uploadDocuments: (id, formData) =>
-    axiosClient.patch(`/technicians/${id}/documents`, formData, {
-      headers: { "Content-Type": "multipart/form-data" },
-    }),
+  // Update technician (accepts plain object for JSON or FormData for file uploads)
+  updateTechnician: (id, body) => {
+    if (body instanceof FormData) {
+      return axiosClient.patch(`/technicians/${id}`, body);
+    }
+    return axiosClient.patch(`/technicians/${id}`, body);
+  },
 
   // CSV export (admin)
   exportCsv: (params = {}) =>

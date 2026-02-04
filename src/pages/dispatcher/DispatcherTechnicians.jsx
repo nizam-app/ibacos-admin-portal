@@ -71,13 +71,20 @@ const mapApiTechToUi = (t) => {
     return isNaN(num) ? null : num * 100; // if backend sends decimal (0.1) convert → 10
   };
 
+  // Support both flat and nested technicianProfile (from directory vs details)
+  const profile = t.technicianProfile ?? t;
+  const commissionRate = normalizePercent(profile.commissionRate ?? t.commissionRate);
+  const salary = profile.baseSalary ?? t.monthlySalary ?? t.baseSalary ?? null;
+  const bonusRate = normalizePercent(profile.bonusRate ?? t.bonusRate);
+  const useCustomRate = profile.useCustomRate === true || t.useCustomRate === true;
+
   return {
     // backend id
     id: t.id, // numeric DB id (for API calls / React key)
     techId: t.techId, // "TECH-061" (for display)
 
     name: t.name,
-    specialty: t.specialization || "General",
+    specialty: profile.specialization ?? t.specialization ?? "General",
     phone: t.phone,
     email: t.email,
     status,
@@ -85,20 +92,24 @@ const mapApiTechToUi = (t) => {
 
     activeWorkOrders: t.activeWorkOrders || 0,
     completedJobs: t.completedJobs || 0,
-    // backend gives number of open WOs
     openWorkOrders: t.openWorkOrders ?? 0,
 
-    commissionRate: normalizePercent(t.commissionRate),
-    salary: t.monthlySalary || t.baseSalary || null,
-    bonusRate: normalizePercent(t.bonusRate),
+    commissionRate,
+    salary: salary != null ? Number(salary) : null,
+    bonusRate,
 
-    joinDate: t.joinDate ? t.joinDate.slice(0, 10) : "",
+    joinDate: (profile.joinDate ?? t.joinDate)?.slice(0, 10) ?? "",
     blockedReason: t.blockedReason || null,
     blockedDate: t.blockedAt ? t.blockedAt.slice(0, 10) : null,
 
-    homeAddress: t.homeAddress || "",
-    academicTitle: t.academicTitle || "",
-    hasCompensationOverride: false, // UI only; backend currently doesn't expose
+    homeAddress: profile.homeAddress ?? t.homeAddress ?? "",
+    academicTitle: profile.academicTitle ?? t.academicTitle ?? "",
+
+    // Custom compensation: expose so modal can show customized vs global
+    hasCompensationOverride: useCustomRate,
+    commissionRateOverride: useCustomRate && employmentType === "Freelancer" ? commissionRate : undefined,
+    salaryOverride: useCustomRate && employmentType === "Internal Employee" ? (salary != null ? Number(salary) : undefined) : undefined,
+    bonusRateOverride: useCustomRate && employmentType === "Internal Employee" ? bonusRate : undefined,
   };
 };
 
@@ -358,13 +369,28 @@ const [defaultInternalBonusRate, setDefaultInternalBonusRate] = useState(null);
       if (editingTechnician) {
         // Update existing technician
         const payload = buildPayloadFromForm(formValues);
-        await TechnicianAPI.updateTechnician(editingTechnician.id, payload);
-        if (formValues.documentsFormData) {
-        await TechnicianAPI.uploadDocuments(
-          editingTechnician.id,
-          formValues.documentsFormData
-        );
-      }
+
+        // When documents are uploaded, use single PATCH with FormData (matches API: form-data to /technicians/:id)
+        if (formValues.documentsFormData && formValues.documentsFormData instanceof FormData) {
+          const formData = new FormData();
+          Object.entries(payload).forEach(([key, value]) => {
+            if (value != null && value !== "") {
+              formData.append(key, typeof value === "object" ? JSON.stringify(value) : value);
+            }
+          });
+          // Only append API-supported file fields: photo, idCardUrl, degreesUrl (avoids "Unexpected field")
+          const allowedFileKeys = ["photo", "idCardUrl", "degreesUrl"];
+          for (const [key, value] of formValues.documentsFormData.entries()) {
+            if (value instanceof File && allowedFileKeys.includes(key)) {
+              formData.append(key, value);
+            } else if (typeof value === "string" && (key === "residencePermitFrom" || key === "residencePermitTo")) {
+              formData.append(key, value);
+            }
+          }
+          await TechnicianAPI.updateTechnician(editingTechnician.id, formData);
+        } else {
+          await TechnicianAPI.updateTechnician(editingTechnician.id, payload);
+        }
 
         Swal.fire({
           icon: "success",
@@ -375,7 +401,28 @@ const [defaultInternalBonusRate, setDefaultInternalBonusRate] = useState(null);
       } else {
         // Create new technician
         const payload = buildPayloadFromForm(formValues);
-        await TechnicianAPI.createTechnician(payload);
+
+        // If documents (photo, idCard, certificates) are uploaded, send as FormData
+        if (formValues.documentsFormData && formValues.documentsFormData instanceof FormData) {
+          const formData = new FormData();
+          // Append all payload fields
+          Object.entries(payload).forEach(([key, value]) => {
+            if (value != null && value !== "") {
+              formData.append(key, typeof value === "object" ? JSON.stringify(value) : value);
+            }
+          });
+          // Append files from documentsFormData (photo, idCardUrl, degreesUrl, residencePermitUrl)
+          for (const [key, value] of formValues.documentsFormData.entries()) {
+            if (value instanceof File) {
+              formData.append(key, value);
+            } else if (typeof value === "string" && (key === "residencePermitFrom" || key === "residencePermitTo")) {
+              formData.append(key, value);
+            }
+          }
+          await TechnicianAPI.createTechnician(formData);
+        } else {
+          await TechnicianAPI.createTechnician(payload);
+        }
 
         Swal.fire({
           icon: "success",

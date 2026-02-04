@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import Swal from "sweetalert2";
 import TechnicianAPI from "../../api/TechnicianAPI";
+import SystemConfigAPI from "../../api/systemConfigApi";
 
 // ------------ Icon components (same as TSX, but JS) ------------
 const Briefcase = ({ className }) => (
@@ -197,6 +198,10 @@ export default function AddEditTechnicianModal({
   const [overrideBonusRate, setOverrideBonusRate] = useState("");
   const [compensationErrors, setCompensationErrors] = useState({});
   const [phoneError, setPhoneError] = useState("");
+  // Fetched from GET /technicians/:id when editing – commission, bonus, baseSalary
+  const [technicianDetails, setTechnicianDetails] = useState(null);
+  const [detailsLoading, setDetailsLoading] = useState(false);
+  const [systemConfig, setSystemConfig] = useState(null);
 
   // Additional Information
   const [isAdditionalInfoOpen, setIsAdditionalInfoOpen] = useState(false);
@@ -215,10 +220,19 @@ export default function AddEditTechnicianModal({
   const [existingCertificatesUrls, setExistingCertificatesUrls] = useState([]);
   const [fileErrors, setFileErrors] = useState({});
 
-    // 🔹 Global values: API theke asle oita use, na ashley fallback
-  const GLOBAL_COMMISSION_RATE = defaultFreelancerRate ?? 10;   // %
-  const GLOBAL_BASE_SALARY = defaultBaseSalary ?? 5000;         // $
-  const GLOBAL_BONUS_RATE = defaultInternalBonusRate ?? 5;      // %
+  // Global values: prefer system config API, then props, then fallback
+  const GLOBAL_COMMISSION_RATE =
+    systemConfig?.freelancerCommissionPercentage ??
+    (systemConfig?.freelancerCommissionRate != null ? systemConfig.freelancerCommissionRate * 100 : null) ??
+    defaultFreelancerRate ??
+    10;
+  const GLOBAL_BASE_SALARY =
+    systemConfig?.internalEmployeeBaseSalary ?? defaultBaseSalary ?? 5000;
+  const GLOBAL_BONUS_RATE =
+    systemConfig?.internalEmployeeBonusPercentage ??
+    (systemConfig?.internalEmployeeBonusRate != null ? systemConfig.internalEmployeeBonusRate * 100 : null) ??
+    defaultInternalBonusRate ??
+    5;
 
 
   // ---------- Phone validation ----------
@@ -288,6 +302,73 @@ export default function AddEditTechnicianModal({
     }
   }, [isOpen]);
 
+  // Fetch global salary/rates from system config when modal opens
+  useEffect(() => {
+    if (!isOpen) return;
+    let cancelled = false;
+    const fetchConfig = async () => {
+      try {
+        const res = await SystemConfigAPI.getConfig();
+        if (cancelled) return;
+        const config = res.data?.config ?? res.data ?? {};
+        setSystemConfig(config);
+      } catch (err) {
+        if (!cancelled) {
+          console.error("Failed to load system config", err);
+          setSystemConfig(null);
+        }
+      }
+    };
+    fetchConfig();
+    return () => { cancelled = true; };
+  }, [isOpen]);
+
+  // Fetch full technician details (commission, bonus, baseSalary) when editing
+  useEffect(() => {
+    if (!technician?.id) {
+      setTechnicianDetails(null);
+      return;
+    }
+    let cancelled = false;
+    const fetchDetails = async () => {
+      setDetailsLoading(true);
+      setTechnicianDetails(null);
+      try {
+        const res = await TechnicianAPI.getDetails(technician.id);
+        if (cancelled) return;
+        const raw = res.data?.technician ?? res.data ?? {};
+        const profile = raw.technicianProfile ?? raw;
+        // API returns commissionRate 0.05, bonusRate 0.12 – normalize to percent
+        const toPercent = (v) => (v != null && !Number.isNaN(Number(v)) ? Number(v) * 100 : null);
+        const commissionRate = toPercent(profile.commissionRate ?? raw.commissionRate);
+        const bonusRate = toPercent(profile.bonusRate ?? raw.bonusRate);
+        const salary = profile.baseSalary ?? raw.baseSalary ?? raw.monthlySalary ?? null;
+        const useCustomRate = profile.useCustomRate === true || raw.useCustomRate === true;
+        const employmentType =
+          (raw.type === "INTERNAL" || profile.type === "INTERNAL") ? "Internal Employee" : "Freelancer";
+        setTechnicianDetails({
+          commissionRate,
+          bonusRate,
+          salary: salary != null ? Number(salary) : null,
+          hasCompensationOverride: useCustomRate,
+          employmentType,
+          commissionRateOverride: useCustomRate && employmentType === "Freelancer" ? commissionRate : undefined,
+          salaryOverride: useCustomRate && employmentType === "Internal Employee" ? (salary != null ? Number(salary) : undefined) : undefined,
+          bonusRateOverride: useCustomRate && employmentType === "Internal Employee" ? bonusRate : undefined,
+        });
+      } catch (err) {
+        if (!cancelled) {
+          console.error("Failed to fetch technician details", err);
+          setTechnicianDetails(null);
+        }
+      } finally {
+        if (!cancelled) setDetailsLoading(false);
+      }
+    };
+    fetchDetails();
+    return () => { cancelled = true; };
+  }, [technician?.id]);
+
   useEffect(() => {
     if (technician) {
       // Normalize phone number - extract only digits
@@ -347,26 +428,39 @@ export default function AddEditTechnicianModal({
         setPermitValidTo(technician.residencePermitTo);
       }
 
-      if (technician.hasCompensationOverride) {
+      // Load compensation override state from technician (initial – may be overwritten by technicianDetails)
+      const src = technicianDetails ?? technician;
+      if (src.hasCompensationOverride) {
         setUseCompensationOverride(true);
         if (
-          technician.employmentType === "Freelancer" &&
-          technician.commissionRateOverride !== undefined
+          (src.employmentType ?? technician.employmentType) === "Freelancer" &&
+          src.commissionRateOverride != null
         ) {
-          setOverrideCommissionRate(
-            technician.commissionRateOverride.toString()
-          );
-        } else if (technician.employmentType === "Internal Employee") {
-          if (technician.salaryOverride !== undefined) {
-            setOverrideSalary(technician.salaryOverride.toString());
+          setOverrideCommissionRate(String(src.commissionRateOverride));
+        } else if ((src.employmentType ?? technician.employmentType) === "Internal Employee") {
+          if (src.salaryOverride != null) {
+            setOverrideSalary(String(src.salaryOverride));
           }
-          if (technician.bonusRateOverride !== undefined) {
-            setOverrideBonusRate(technician.bonusRateOverride.toString());
+          if (src.bonusRateOverride != null) {
+            setOverrideBonusRate(String(src.bonusRateOverride));
           }
         }
+      } else {
+        setUseCompensationOverride(false);
+        setOverrideCommissionRate("");
+        setOverrideSalary("");
+        setOverrideBonusRate("");
+        setCompensationErrors({});
       }
+    } else {
+      // Add mode – reset override state
+      setUseCompensationOverride(false);
+      setOverrideCommissionRate("");
+      setOverrideSalary("");
+      setOverrideBonusRate("");
+      setCompensationErrors({});
     }
-  }, [technician]);
+  }, [technician, technicianDetails]);
 
   useEffect(() => {
     if (technician) {
@@ -619,12 +713,13 @@ export default function AddEditTechnicianModal({
       }
     } else {
       data.hasCompensationOverride = false;
+      const compSource = technician ? (technicianDetails ?? technician) : null;
       if (formData.employmentType === "Freelancer") {
         data.commissionRate =
-          technician?.commissionRate || GLOBAL_COMMISSION_RATE;
+          compSource?.commissionRate ?? GLOBAL_COMMISSION_RATE;
       } else {
-        data.salary = technician?.salary || GLOBAL_BASE_SALARY;
-        data.bonusRate = technician?.bonusRate || GLOBAL_BONUS_RATE;
+        data.salary = compSource?.salary ?? GLOBAL_BASE_SALARY;
+        data.bonusRate = compSource?.bonusRate ?? GLOBAL_BONUS_RATE;
       }
     }
 
@@ -643,8 +738,9 @@ export default function AddEditTechnicianModal({
       const formDataDocs = new FormData();
 
       // New files take priority over existing URLs
+      // API expects "photo" (not "photoUrl") for the file field
       if (personalPhoto) {
-        formDataDocs.append("photoUrl", personalPhoto);
+        formDataDocs.append("photo", personalPhoto);
       } else if (existingPhotoUrl && !personalPhoto) {
         // Keep existing photo if no new one is uploaded
         // Backend should handle this, but we can pass the URL if needed
@@ -685,12 +781,6 @@ export default function AddEditTechnicianModal({
       data.documentsFormData = formDataDocs;
     }
 
-    Swal.fire({
-      icon: "success",
-      title: technician ? "Technician updated" : "Technician added",
-      text: "This is demo data – integrate your API here.",
-    });
-
     if (onSave) onSave(data);
   };
 
@@ -724,6 +814,8 @@ export default function AddEditTechnicianModal({
     setCompensationErrors({});
     setPhoneError("");
     setUseCompensationOverride(false);
+    setTechnicianDetails(null);
+    setSystemConfig(null);
 
     if (onClose) onClose();
   };
@@ -1041,6 +1133,7 @@ export default function AddEditTechnicianModal({
               </div>
             </div>
 
+            {/* Global values – always shown for reference */}
             <div className="p-2 bg-gray-50 border border-gray-200 rounded text-xs text-gray-600">
               {formData.employmentType === "Freelancer" ? (
                 <span>
@@ -1183,49 +1276,102 @@ export default function AddEditTechnicianModal({
 
             {(userRole === "dispatcher" ||
               (userRole === "admin" && !useCompensationOverride)) &&
-              (formData.employmentType === "Freelancer" ? (
-                <div className="p-4 bg-purple-50 border border-purple-200 rounded-lg space-y-2">
-                  <div className="flex items-center gap-2 text-purple-900">
-                    <Percent className="w-5 h-5" />
-                    <span>Commission (Global)</span>
+              (() => {
+                const compensationSource = technician ? (technicianDetails ?? technician) : null;
+                return formData.employmentType === "Freelancer" ? (
+                  <div className="p-4 bg-purple-50 border border-purple-200 rounded-lg space-y-2">
+                    <div className="flex items-center gap-2 text-purple-900">
+                      <Percent className="w-5 h-5" />
+                      <span>
+                        Commission
+                        {compensationSource?.hasCompensationOverride ? " (Customized)" : " (Global)"}
+                      </span>
+                    </div>
+                    <p className="text-gray-800">
+                      {detailsLoading ? (
+                        <span className="text-gray-500 text-sm">Loading...</span>
+                      ) : compensationSource?.hasCompensationOverride ? (
+                        <>
+                          Customized:{" "}
+                          <span className="text-purple-600 font-semibold">
+                            {compensationSource.commissionRate != null ? `${compensationSource.commissionRate}%` : "—"}
+                          </span>
+                          <span className="block mt-1 text-xs text-gray-500">
+                            Global default: {GLOBAL_COMMISSION_RATE}%
+                          </span>
+                        </>
+                      ) : (
+                        <>
+                          Applied:{" "}
+                          <span className="text-purple-600">
+                            {compensationSource?.commissionRate != null ? `${compensationSource.commissionRate}%` : `${GLOBAL_COMMISSION_RATE}%`}
+                          </span>
+                          <span className="block mt-1 text-xs text-gray-500">
+                            {compensationSource ? "Applied to this technician" : "Using global rate"}
+                          </span>
+                        </>
+                      )}
+                    </p>
+                    <p className="text-xs text-gray-600 italic">
+                      {userRole === "dispatcher" ? "Read-only." : ""}
+                    </p>
                   </div>
-                  <p className="text-gray-800">
-                    Configured by Admin:{" "}
-                    <span className="text-purple-600">
-                      {GLOBAL_COMMISSION_RATE}%
-                    </span>
-                  </p>
-                  <p className="text-xs text-gray-600 italic">
-                    Applied automatically to all freelancers.{" "}
-                    {userRole === "dispatcher" ? "Read-only." : ""}
-                  </p>
-                </div>
-              ) : (
-                <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg space-y-2">
-                  <div className="flex items-center gap-2 text-blue-900">
-                    <DollarSign className="w-5 h-5" />
-                    <span>Salary & Bonus (Global)</span>
+                ) : (
+                  <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg space-y-2">
+                    <div className="flex items-center gap-2 text-blue-900">
+                      <DollarSign className="w-5 h-5" />
+                      <span>
+                        Salary & Bonus
+                        {compensationSource?.hasCompensationOverride ? " (Customized)" : " (Global)"}
+                      </span>
+                    </div>
+                    {detailsLoading ? (
+                      <p className="text-gray-500 text-sm">Loading...</p>
+                    ) : compensationSource?.hasCompensationOverride ? (
+                      <>
+                        <p className="text-gray-800">
+                          Customized Base Salary:{" "}
+                          <span className="text-blue-600 font-semibold">
+                            {compensationSource.salary != null ? `$${Number(compensationSource.salary).toLocaleString()}` : "—"}
+                          </span>
+                        </p>
+                        <p className="text-gray-800">
+                          Customized Bonus Rate:{" "}
+                          <span className="text-blue-600 font-semibold">
+                            {compensationSource.bonusRate != null ? `${compensationSource.bonusRate}%` : "—"}
+                          </span>
+                        </p>
+                        <p className="text-xs text-gray-500">
+                          Global: ${GLOBAL_BASE_SALARY.toLocaleString()} base · {GLOBAL_BONUS_RATE}% bonus
+                        </p>
+                      </>
+                    ) : (
+                      <>
+                        <p className="text-gray-800">
+                          Base Salary:{" "}
+                          <span className="text-blue-600">
+                            {compensationSource?.salary != null
+                              ? `$${Number(compensationSource.salary).toLocaleString()}`
+                              : `$${GLOBAL_BASE_SALARY.toLocaleString()}`}
+                          </span>
+                        </p>
+                        <p className="text-gray-800">
+                          Bonus Rate:{" "}
+                          <span className="text-blue-600">
+                            {compensationSource?.bonusRate != null ? `${compensationSource.bonusRate}%` : `${GLOBAL_BONUS_RATE}%`}
+                          </span>
+                        </p>
+                        <p className="text-xs text-gray-500">
+                          {compensationSource ? "Applied to this technician" : "Using global rates"}
+                        </p>
+                      </>
+                    )}
+                    <p className="text-xs text-gray-600 italic">
+                      {userRole === "dispatcher" ? "Read-only for Dispatcher." : ""}
+                    </p>
                   </div>
-                  <p className="text-gray-800">
-                    Base Salary:{" "}
-                    <span className="text-blue-600">
-                      ${GLOBAL_BASE_SALARY.toLocaleString()}
-                    </span>
-                  </p>
-                  <p className="text-gray-800">
-                    Bonus Rate:{" "}
-                    <span className="text-blue-600">
-                      {GLOBAL_BONUS_RATE}%
-                    </span>
-                  </p>
-                  <p className="text-xs text-gray-600 italic">
-                    Configured by Admin.{" "}
-                    {userRole === "dispatcher"
-                      ? "Read-only for Dispatcher."
-                      : ""}
-                  </p>
-                </div>
-              ))}
+                );
+              })()}
           </div>
 
           {/* Additional Info */}
