@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import Swal from "sweetalert2";
 import TechnicianAPI from "../../api/TechnicianAPI";
 import SystemConfigAPI from "../../api/systemConfigApi";
+import RatesAPI from "../../api/ratesApi";
 
 // ------------ Icon components (same as TSX, but JS) ------------
 const Briefcase = ({ className }) => (
@@ -202,6 +203,7 @@ export default function AddEditTechnicianModal({
   const [technicianDetails, setTechnicianDetails] = useState(null);
   const [detailsLoading, setDetailsLoading] = useState(false);
   const [systemConfig, setSystemConfig] = useState(null);
+  const [globalRates, setGlobalRates] = useState({ commission: null, bonus: null });
 
   // Additional Information
   const [isAdditionalInfoOpen, setIsAdditionalInfoOpen] = useState(false);
@@ -220,19 +222,29 @@ export default function AddEditTechnicianModal({
   const [existingCertificatesUrls, setExistingCertificatesUrls] = useState([]);
   const [fileErrors, setFileErrors] = useState({});
 
-  // Global values: prefer system config API, then props, then fallback
-  const GLOBAL_COMMISSION_RATE =
-    systemConfig?.freelancerCommissionPercentage ??
-    (systemConfig?.freelancerCommissionRate != null ? systemConfig.freelancerCommissionRate * 100 : null) ??
-    defaultFreelancerRate ??
-    10;
+  // Global values: commission/bonus from /api/rates, base salary from system config, then props/fallback
+  const GLOBAL_COMMISSION_RATE = (() => {
+    const v = globalRates.commission ??
+      systemConfig?.freelancerCommissionPercentage ??
+      (systemConfig?.freelancerCommissionRate != null ? systemConfig.freelancerCommissionRate * 100 : null) ??
+      defaultFreelancerRate ??
+      10;
+    return v != null ? Math.round(Number(v) * 10) / 10 : v;
+  })();
   const GLOBAL_BASE_SALARY =
     systemConfig?.internalEmployeeBaseSalary ?? defaultBaseSalary ?? 5000;
-  const GLOBAL_BONUS_RATE =
-    systemConfig?.internalEmployeeBonusPercentage ??
-    (systemConfig?.internalEmployeeBonusRate != null ? systemConfig.internalEmployeeBonusRate * 100 : null) ??
-    defaultInternalBonusRate ??
-    5;
+  const GLOBAL_BONUS_RATE = (() => {
+    const v = globalRates.bonus ??
+      systemConfig?.internalEmployeeBonusPercentage ??
+      (systemConfig?.internalEmployeeBonusRate != null ? systemConfig.internalEmployeeBonusRate * 100 : null) ??
+      defaultInternalBonusRate ??
+      5;
+    return v != null ? Math.round(Number(v) * 10) / 10 : v;
+  })();
+
+  // Format percent for display (avoids floating point like 14.000000000000002)
+  const formatPercent = (n) =>
+    n == null || Number.isNaN(Number(n)) ? "" : (Number(n) % 1 === 0 ? String(Math.round(n)) : String(Math.round(Number(n) * 10) / 10));
 
 
   // ---------- Phone validation ----------
@@ -323,6 +335,47 @@ export default function AddEditTechnicianModal({
     return () => { cancelled = true; };
   }, [isOpen]);
 
+  // Fetch global commission/bonus from GET /api/rates when modal opens
+  useEffect(() => {
+    if (!isOpen) return;
+    let cancelled = false;
+    const fetchRates = async () => {
+      try {
+        const res = await RatesAPI.getAllRates();
+        if (cancelled) return;
+        const list = Array.isArray(res.data) ? res.data : res.data?.rates ?? [];
+        const commission = list.find(
+          (r) => r.type === "COMMISSION" && r.techType === "FREELANCER"
+        );
+        const bonus = list.find(
+          (r) => r.type === "BONUS" && r.techType === "INTERNAL"
+        );
+        // Prefer default rate, else first matching
+        const defaultCommission = list.find(
+          (r) => r.type === "COMMISSION" && r.techType === "FREELANCER" && r.isDefault
+        ) ?? commission;
+        const defaultBonus = list.find(
+          (r) => r.type === "BONUS" && r.techType === "INTERNAL" && r.isDefault
+        ) ?? bonus;
+        const toPct = (r) => {
+          const v = r?.ratePercentage ?? (r?.rate != null ? r.rate * 100 : null);
+          return v != null ? Math.round(Number(v) * 10) / 10 : null;
+        };
+        setGlobalRates({
+          commission: toPct(defaultCommission),
+          bonus: toPct(defaultBonus),
+        });
+      } catch (err) {
+        if (!cancelled) {
+          console.error("Failed to load rates", err);
+          setGlobalRates({ commission: null, bonus: null });
+        }
+      }
+    };
+    fetchRates();
+    return () => { cancelled = true; };
+  }, [isOpen]);
+
   // Fetch full technician details (commission, bonus, baseSalary) when editing
   useEffect(() => {
     if (!technician?.id) {
@@ -338,8 +391,11 @@ export default function AddEditTechnicianModal({
         if (cancelled) return;
         const raw = res.data?.technician ?? res.data ?? {};
         const profile = raw.technicianProfile ?? raw;
-        // API returns commissionRate 0.05, bonusRate 0.12 – normalize to percent
-        const toPercent = (v) => (v != null && !Number.isNaN(Number(v)) ? Number(v) * 100 : null);
+        // API returns commissionRate 0.05, bonusRate 0.12 – normalize to percent, round to avoid float artifacts
+        const toPercent = (v) => {
+          const n = v != null && !Number.isNaN(Number(v)) ? Number(v) * 100 : null;
+          return n != null ? Math.round(n * 10) / 10 : null;
+        };
         const commissionRate = toPercent(profile.commissionRate ?? raw.commissionRate);
         const bonusRate = toPercent(profile.bonusRate ?? raw.bonusRate);
         const salary = profile.baseSalary ?? raw.baseSalary ?? raw.monthlySalary ?? null;
@@ -816,6 +872,7 @@ export default function AddEditTechnicianModal({
     setUseCompensationOverride(false);
     setTechnicianDetails(null);
     setSystemConfig(null);
+    setGlobalRates({ commission: null, bonus: null });
 
     if (onClose) onClose();
   };
@@ -1139,7 +1196,7 @@ export default function AddEditTechnicianModal({
                 <span>
                   Global Commission:{" "}
                   <strong className="text-purple-600">
-                    {GLOBAL_COMMISSION_RATE}%
+                    {formatPercent(GLOBAL_COMMISSION_RATE)}%
                   </strong>
                 </span>
               ) : (
@@ -1150,7 +1207,7 @@ export default function AddEditTechnicianModal({
                   </strong>{" "}
                   · Global Bonus:{" "}
                   <strong className="text-blue-600">
-                    {GLOBAL_BONUS_RATE}%
+                    {formatPercent(GLOBAL_BONUS_RATE)}%
                   </strong>
                 </span>
               )}
@@ -1294,17 +1351,17 @@ export default function AddEditTechnicianModal({
                         <>
                           Customized:{" "}
                           <span className="text-purple-600 font-semibold">
-                            {compensationSource.commissionRate != null ? `${compensationSource.commissionRate}%` : "—"}
+                            {compensationSource.commissionRate != null ? `${formatPercent(compensationSource.commissionRate)}%` : "—"}
                           </span>
                           <span className="block mt-1 text-xs text-gray-500">
-                            Global default: {GLOBAL_COMMISSION_RATE}%
+                            Global default: {formatPercent(GLOBAL_COMMISSION_RATE)}%
                           </span>
                         </>
                       ) : (
                         <>
                           Applied:{" "}
                           <span className="text-purple-600">
-                            {compensationSource?.commissionRate != null ? `${compensationSource.commissionRate}%` : `${GLOBAL_COMMISSION_RATE}%`}
+                            {compensationSource?.commissionRate != null ? `${formatPercent(compensationSource.commissionRate)}%` : `${formatPercent(GLOBAL_COMMISSION_RATE)}%`}
                           </span>
                           <span className="block mt-1 text-xs text-gray-500">
                             {compensationSource ? "Applied to this technician" : "Using global rate"}
@@ -1338,11 +1395,11 @@ export default function AddEditTechnicianModal({
                         <p className="text-gray-800">
                           Customized Bonus Rate:{" "}
                           <span className="text-blue-600 font-semibold">
-                            {compensationSource.bonusRate != null ? `${compensationSource.bonusRate}%` : "—"}
+                            {compensationSource.bonusRate != null ? `${formatPercent(compensationSource.bonusRate)}%` : "—"}
                           </span>
                         </p>
                         <p className="text-xs text-gray-500">
-                          Global: ${GLOBAL_BASE_SALARY.toLocaleString()} base · {GLOBAL_BONUS_RATE}% bonus
+                          Global: ${GLOBAL_BASE_SALARY.toLocaleString()} base · {formatPercent(GLOBAL_BONUS_RATE)}% bonus
                         </p>
                       </>
                     ) : (
@@ -1358,7 +1415,7 @@ export default function AddEditTechnicianModal({
                         <p className="text-gray-800">
                           Bonus Rate:{" "}
                           <span className="text-blue-600">
-                            {compensationSource?.bonusRate != null ? `${compensationSource.bonusRate}%` : `${GLOBAL_BONUS_RATE}%`}
+                            {compensationSource?.bonusRate != null ? `${formatPercent(compensationSource.bonusRate)}%` : `${formatPercent(GLOBAL_BONUS_RATE)}%`}
                           </span>
                         </p>
                         <p className="text-xs text-gray-500">
