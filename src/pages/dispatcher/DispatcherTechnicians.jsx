@@ -105,6 +105,10 @@ const mapApiTechToUi = (t) => {
     homeAddress: profile.homeAddress ?? t.homeAddress ?? "",
     academicTitle: profile.academicTitle ?? t.academicTitle ?? "",
 
+    photoUrl: profile.photoUrl ?? t.photoUrl ?? null,
+    idCardUrl: profile.idCardUrl ?? t.idCardUrl ?? null,
+    degreesUrl: profile.degreesUrl ?? t.degreesUrl ?? null,
+
     // Custom compensation: expose so modal can show customized vs global
     hasCompensationOverride: useCustomRate,
     commissionRateOverride: useCustomRate && employmentType === "Freelancer" ? commissionRate : undefined,
@@ -258,9 +262,21 @@ const [defaultInternalBonusRate, setDefaultInternalBonusRate] = useState(null);
 
   // ---------- actions ----------
 
+  const [exportingCsv, setExportingCsv] = useState(false);
+
+  const escapeCsvValue = (val) => {
+    if (val == null || val === "") return "";
+    const str = String(val);
+    if (str.includes(",") || str.includes('"') || str.includes("\n")) {
+      return `"${str.replace(/"/g, '""')}"`;
+    }
+    return str;
+  };
+
   const handleExportCSV = async () => {
     try {
-      // match current filters roughly
+      setExportingCsv(true);
+
       const apiType =
         filterType === "all"
           ? "All"
@@ -268,23 +284,107 @@ const [defaultInternalBonusRate, setDefaultInternalBonusRate] = useState(null);
             ? "FREELANCER"
             : "INTERNAL";
 
-      const res = await TechnicianAPI.exportCsv({
-        specialization:
-          selectedSpecializations.length === 1
-            ? selectedSpecializations[0]
-            : "All",
+      const specParam =
+        selectedSpecializations.length === 1
+          ? selectedSpecializations[0]
+          : "All";
+
+      const dirRes = await TechnicianAPI.getDirectory({
+        search: "",
+        specialization: specParam,
         type: apiType,
       });
 
-      const blob = new Blob([res.data], {
+      const apiTechs = dirRes.data?.technicians || [];
+
+      const detailsPromises = apiTechs.map((t) =>
+        TechnicianAPI.getDetails(t.id).catch(() => ({ data: t }))
+      );
+      const detailsResults = await Promise.all(detailsPromises);
+
+      const extractDocUrl = (obj, key) => {
+        if (!obj || typeof obj !== "object") return "";
+        const snakeKey = key.replace(/([A-Z])/g, "_$1").toLowerCase().replace(/^_/, "");
+        const fromObj = (o) => o?.[key] ?? o?.[snakeKey] ?? o?.technicianProfile?.[key] ?? o?.technicianProfile?.[snakeKey];
+        return fromObj(obj) ?? "";
+      };
+
+      const techsWithDocs = detailsResults.map((res, idx) => {
+        const apiTech = apiTechs[idx];
+        const raw = res.data?.technician ?? res.data?.data ?? res.data ?? apiTech;
+        const profile = raw?.technicianProfile ?? raw ?? {};
+        const src = typeof profile === "object" ? profile : {};
+        const t = typeof raw === "object" ? raw : {};
+
+        let photoUrl = extractDocUrl(src, "photoUrl") || extractDocUrl(t, "photoUrl") || extractDocUrl(apiTech, "photoUrl");
+        let idCardUrl = extractDocUrl(src, "idCardUrl") || extractDocUrl(t, "idCardUrl") || extractDocUrl(apiTech, "idCardUrl");
+        let degreesUrl = extractDocUrl(src, "degreesUrl") || extractDocUrl(t, "degreesUrl") || extractDocUrl(apiTech, "degreesUrl");
+
+        if (Array.isArray(degreesUrl)) {
+          degreesUrl = degreesUrl.join("; ");
+        } else if (typeof degreesUrl === "string" && degreesUrl.startsWith("[")) {
+          try {
+            const parsed = JSON.parse(degreesUrl);
+            degreesUrl = Array.isArray(parsed) ? parsed.join("; ") : degreesUrl;
+          } catch {
+            degreesUrl = String(degreesUrl ?? "");
+          }
+        } else if (degreesUrl && typeof degreesUrl !== "string") {
+          degreesUrl = String(degreesUrl);
+        }
+
+        return {
+          techId: apiTech?.techId ?? t?.techId ?? "",
+          name: apiTech?.name ?? t?.name ?? "",
+          phone: apiTech?.phone ?? t?.phone ?? "",
+          email: apiTech?.email ?? t?.email ?? "",
+          specialization: apiTech?.specialization ?? t?.specialization ?? src?.specialization ?? "",
+          type: apiTech?.type ?? t?.type ?? "",
+          status: apiTech?.status ?? t?.status ?? "",
+          photoUrl: photoUrl || "",
+          idCardUrl: idCardUrl || "",
+          degreesUrl: degreesUrl || "",
+        };
+      });
+
+      const headers = [
+        "Tech ID",
+        "Name",
+        "Phone",
+        "Email",
+        "Specialization",
+        "Type",
+        "Status",
+        "Photo URL",
+        "ID Card URL",
+        "Degrees URL",
+      ];
+
+      const rows = techsWithDocs.map((t) => [
+        escapeCsvValue(t.techId),
+        escapeCsvValue(t.name),
+        escapeCsvValue(t.phone),
+        escapeCsvValue(t.email),
+        escapeCsvValue(t.specialization),
+        escapeCsvValue(t.type),
+        escapeCsvValue(t.status),
+        escapeCsvValue(t.photoUrl),
+        escapeCsvValue(t.idCardUrl),
+        escapeCsvValue(t.degreesUrl),
+      ]);
+
+      const csvContent = [
+        headers.join(","),
+        ...rows.map((r) => r.join(",")),
+      ].join("\n");
+
+      const blob = new Blob(["\uFEFF" + csvContent], {
         type: "text/csv;charset=utf-8;",
       });
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
-      link.download = `technicians_${new Date()
-        .toISOString()
-        .split("T")[0]}.csv`;
+      link.download = `technicians_${new Date().toISOString().split("T")[0]}.csv`;
       link.click();
       URL.revokeObjectURL(url);
 
@@ -298,6 +398,8 @@ const [defaultInternalBonusRate, setDefaultInternalBonusRate] = useState(null);
     } catch (err) {
       console.error("Export CSV failed", err);
       Swal.fire("Error", "Failed to export CSV. Please try again.", "error");
+    } finally {
+      setExportingCsv(false);
     }
   };
 
@@ -594,10 +696,11 @@ const [defaultInternalBonusRate, setDefaultInternalBonusRate] = useState(null);
                 <button
                   type="button"
                   onClick={handleExportCSV}
-                  className="inline-flex items-center px-3 py-2 border border-[#c20001] text-[#c20001] rounded-lg text-sm hover:bg-[#c20001] hover:text-white transition-colors"
+                  disabled={exportingCsv}
+                  className="inline-flex items-center px-3 py-2 border border-[#c20001] text-[#c20001] rounded-lg text-sm hover:bg-[#c20001] hover:text-white transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
                 >
                   <Download className="w-4 h-4 mr-2" />
-                  Export CSV
+                  {exportingCsv ? "Exporting..." : "Export CSV"}
                 </button>
 
                 <button

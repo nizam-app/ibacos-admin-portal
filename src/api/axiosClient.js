@@ -3,7 +3,8 @@ import axios from "axios";
 
 const axiosClient = axios.create({
   // baseURL: "https://outside2backend.mtscorporate.com/api",
-  baseURL: "http://localhost:4000/api",
+  // baseURL: "/api",
+  baseURL: "http://103.208.183.248:4000/api",
 });
 
 // --- request interceptor: token add ---
