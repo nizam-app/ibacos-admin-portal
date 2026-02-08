@@ -103,23 +103,31 @@ const Label = ({ className = "", children }) => (
   </label>
 );
 
-// Simple modal wrapper
+// Simple modal wrapper (backdrop click closes)
 const Modal = ({ open, onClose, children, maxWidth = "max-w-2xl" }) => {
   if (!open) return null;
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+      onClick={onClose}
+      role="dialog"
+      aria-modal="true"
+    >
       <div
-        className={`bg-white rounded-2xl shadow-xl w-full ${maxWidth} max-h-[80vh] overflow-y-auto`}
+        className={`bg-white rounded-2xl shadow-2xl w-full ${maxWidth} max-h-[90vh] overflow-y-auto`}
+        onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex justify-end p-3 border-b border-gray-100">
+        <div className="flex justify-end p-3">
           <button
+            type="button"
             onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 text-sm"
+            className="text-gray-400 hover:text-gray-600 p-1.5 rounded-lg hover:bg-gray-100 transition-colors"
+            aria-label="Close"
           >
             ✕
           </button>
         </div>
-        <div className="px-6 pb-6 pt-2">{children}</div>
+        <div className="px-6 pb-6 pt-0">{children}</div>
       </div>
     </div>
   );
@@ -340,6 +348,12 @@ const AdminPayoutManagement = () => {
   const [rejectionReason, setRejectionReason] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
   const [filterType, setFilterType] = useState("All"); // All | Commission | Bonus
+
+  const [batchToMarkPaid, setBatchToMarkPaid] = useState(null);
+  const [markPaidReference, setMarkPaidReference] = useState("");
+  const [markPaidMethod, setMarkPaidMethod] = useState("");
+  const [markPaidNotes, setMarkPaidNotes] = useState("");
+  const [markPaidSubmitting, setMarkPaidSubmitting] = useState(false);
 
   // --------- real data states (no mock) ----------
   const [pendingCommissions, setPendingCommissions] = useState([]);
@@ -622,72 +636,47 @@ const AdminPayoutManagement = () => {
   };
 
 
-  const handleMarkPaid = async (batchId) => {
+  const openMarkPaidModal = (batch) => {
+    setBatchToMarkPaid(batch);
+    setMarkPaidReference("");
+    setMarkPaidMethod("");
+    setMarkPaidNotes("");
+  };
+
+  const closeMarkPaidModal = () => {
+    setBatchToMarkPaid(null);
+    setMarkPaidReference("");
+    setMarkPaidMethod("");
+    setMarkPaidNotes("");
+  };
+
+  const handleMarkPaidSubmit = async () => {
+    if (!batchToMarkPaid) return;
+    const ref = markPaidReference.trim();
+    const method = markPaidMethod.trim();
+    if (!ref) {
+      Swal.fire("Required", "Payment reference is required", "warning");
+      return;
+    }
+    if (!method) {
+      Swal.fire("Required", "Payment method is required", "warning");
+      return;
+    }
     try {
-      // First, collect payment information using SweetAlert2 form
-      const result = await Swal.fire({
-        title: "Mark batch as paid",
-        html: `
-          <div style="text-align: left;">
-            <label style="display: block; margin-bottom: 8px; font-weight: 500; color: #374151;">Payment Reference *</label>
-            <input id="paymentReference" class="swal2-input" placeholder="e.g. TXN123456" required>
-            
-            <label style="display: block; margin-top: 16px; margin-bottom: 8px; font-weight: 500; color: #374151;">Payment Method *</label>
-            <select id="paymentMethod" class="swal2-select" style="display: block; width: 100%; padding: 8px; margin-bottom: 16px; border: 1px solid #d1d5db; border-radius: 4px;" required>
-              <option value="">Select payment method</option>
-              <option value="Bank Transfer">Bank Transfer</option>
-              <option value="Cash">Cash</option>
-              <option value="Mobile Money">Mobile Money</option>
-              <option value="Check">Check</option>
-              <option value="Other">Other</option>
-            </select>
-            
-            <label style="display: block; margin-top: 16px; margin-bottom: 8px; font-weight: 500; color: #374151;">Notes</label>
-            <textarea id="notes" class="swal2-textarea" placeholder="e.g. Paid via company account" style="min-height: 80px;"></textarea>
-          </div>
-        `,
-        focusConfirm: false,
-        showCancelButton: true,
-        confirmButtonText: "Mark as Paid",
-        cancelButtonText: "Cancel",
-        confirmButtonColor: "#c20001",
-        cancelButtonColor: "#6b7280",
-        preConfirm: () => {
-          const paymentReference = document.getElementById("paymentReference").value.trim();
-          const paymentMethod = document.getElementById("paymentMethod").value;
-          const notes = document.getElementById("notes").value.trim();
-
-          if (!paymentReference) {
-            Swal.showValidationMessage("Payment reference is required");
-            return false;
-          }
-          if (!paymentMethod) {
-            Swal.showValidationMessage("Payment method is required");
-            return false;
-          }
-
-          return {
-            paymentReference,
-            paymentMethod,
-            notes: notes || "",
-          };
-        },
-      });
-
-      if (!result.isConfirmed || !result.value) return;
-
-      const payload = result.value;
-
-      // Call the API with payment details
-      const { data } = await PayoutsAPI.markPaid(batchId, payload);
-
+      setMarkPaidSubmitting(true);
+      const payload = {
+        paymentReference: ref,
+        paymentMethod: method,
+        notes: markPaidNotes.trim() || "",
+      };
+      const { data } = await PayoutsAPI.markPaid(batchToMarkPaid.id, payload);
       Swal.fire({
         icon: "success",
         title: "Paid",
         text: data?.message || "Batch marked as paid successfully.",
         confirmButtonColor: "#c20001",
       });
-
+      closeMarkPaidModal();
       await loadPayoutDashboard();
     } catch (err) {
       console.error("Mark paid failed", err);
@@ -697,6 +686,8 @@ const AdminPayoutManagement = () => {
         text: err?.response?.data?.message || "Failed to mark batch as paid. Please try again.",
         confirmButtonColor: "#c20001",
       });
+    } finally {
+      setMarkPaidSubmitting(false);
     }
   };
 
@@ -1378,7 +1369,7 @@ const AdminPayoutManagement = () => {
                         <Button
                           size="sm"
                           className="bg-green-600 hover:bg-green-700"
-                          onClick={() => handleMarkPaid(b.id)}
+                          onClick={() => openMarkPaidModal(b)}
                         >
                           <DollarSign className="h-4 w-4 mr-1.5" />
                           Mark as Paid
@@ -1490,6 +1481,80 @@ const AdminPayoutManagement = () => {
           </CardContent>
         </Card>
       )}
+
+      {/* ---------- Mark batch as paid Modal ---------- */}
+      <Modal
+        open={!!batchToMarkPaid}
+        onClose={closeMarkPaidModal}
+        maxWidth="max-w-md"
+      >
+        <div className="pt-2 -mt-2">
+          <div className="flex items-center gap-3 mb-6">
+            <div className="h-12 w-12 rounded-xl bg-[#c20001]/10 flex items-center justify-center shrink-0">
+              <DollarSign className="h-6 w-6 text-[#c20001]" />
+            </div>
+            <div>
+              <h2 className="text-xl font-semibold text-gray-900">
+                Mark batch as paid
+              </h2>
+              {batchToMarkPaid && (
+                <p className="text-sm text-gray-500 mt-0.5">
+                  {batchToMarkPaid.batchNumber} · ${Number(batchToMarkPaid.totalAmount || 0).toFixed(2)}
+                </p>
+              )}
+            </div>
+          </div>
+
+          <div className="space-y-5">
+            <div>
+              <Label className="mb-2 block">Payment Reference <span className="text-red-500">*</span></Label>
+              <Input
+                value={markPaidReference}
+                onChange={(e) => setMarkPaidReference(e.target.value)}
+                placeholder="e.g. TXN123456"
+                className="h-11"
+              />
+            </div>
+            <div>
+              <Label className="mb-2 block">Payment Method <span className="text-red-500">*</span></Label>
+              <select
+                value={markPaidMethod}
+                onChange={(e) => setMarkPaidMethod(e.target.value)}
+                className="w-full h-11 rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#c20001] focus:border-transparent bg-white"
+              >
+                <option value="">Select payment method</option>
+                <option value="Bank Transfer">Bank Transfer</option>
+                <option value="Cash">Cash</option>
+                <option value="Mobile Money">Mobile Money</option>
+                <option value="Check">Check</option>
+                <option value="Other">Other</option>
+              </select>
+            </div>
+            <div>
+              <Label className="mb-2 block">Notes</Label>
+              <Textarea
+                value={markPaidNotes}
+                onChange={(e) => setMarkPaidNotes(e.target.value)}
+                placeholder="e.g. Paid via company account"
+                rows={3}
+                className="resize-none"
+              />
+            </div>
+          </div>
+
+          <div className="flex justify-end gap-3 mt-8 pt-6 border-t border-gray-100">
+            <Button variant="outline" onClick={closeMarkPaidModal}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleMarkPaidSubmit}
+              disabled={markPaidSubmitting}
+            >
+              {markPaidSubmitting ? "Saving…" : "Mark as Paid"}
+            </Button>
+          </div>
+        </div>
+      </Modal>
 
       {/* ---------- Create Batch Modal ---------- */}
       <Modal
