@@ -705,13 +705,22 @@ export default function AddEditTechnicianModal({
       });
       return;
     }
-    // ✅ NEW – only for create
+    // Password validation
     if (!technician) {
       if (!formData.password || formData.password.trim().length < 6) {
         Swal.fire({
           icon: "warning",
           title: "Invalid password",
           text: "Please set a password with at least 6 characters.",
+        });
+        return;
+      }
+    } else if (formData.password.trim()) {
+      if (formData.password.trim().length < 6) {
+        Swal.fire({
+          icon: "warning",
+          title: "Invalid password",
+          text: "New password must be at least 6 characters.",
         });
         return;
       }
@@ -752,8 +761,9 @@ export default function AddEditTechnicianModal({
       homeAddress: homeAddress || null,
       academicTitle: academicTitle || null,
     };
-    if (!technician) {
-      data.password = formData.password;
+    const passwordToSend = formData.password?.trim();
+    if (passwordToSend) {
+      data.password = passwordToSend;
     }
 
     if (userRole === "admin" && useCompensationOverride) {
@@ -769,13 +779,17 @@ export default function AddEditTechnicianModal({
       }
     } else {
       data.hasCompensationOverride = false;
-      const compSource = technician ? (technicianDetails ?? technician) : null;
-      if (formData.employmentType === "Freelancer") {
-        data.commissionRate =
-          compSource?.commissionRate ?? GLOBAL_COMMISSION_RATE;
-      } else {
-        data.salary = compSource?.salary ?? GLOBAL_BASE_SALARY;
-        data.bonusRate = compSource?.bonusRate ?? GLOBAL_BONUS_RATE;
+      // When creating: do NOT send commission/bonus – backend uses global defaults
+      // When editing: send current values so backend can persist them
+      if (technician) {
+        const compSource = technicianDetails ?? technician;
+        if (formData.employmentType === "Freelancer") {
+          data.commissionRate =
+            compSource?.commissionRate ?? GLOBAL_COMMISSION_RATE;
+        } else {
+          data.salary = compSource?.salary ?? GLOBAL_BASE_SALARY;
+          data.bonusRate = compSource?.bonusRate ?? GLOBAL_BONUS_RATE;
+        }
       }
     }
 
@@ -1015,21 +1029,32 @@ export default function AddEditTechnicianModal({
                   required
                 />
               </div>
-              {!technician && (
-                <div>
-                  <Label htmlFor="password">Password *</Label>
-                  <TextInput
-                    id="password"
-                    type="password"
-                    value={formData.password}
-                    onChange={(e) =>
-                      setFormData({ ...formData, password: e.target.value })
-                    }
-                    placeholder="Set login password"
-                    required
-                  />
-                </div>
-              )}
+
+              <div>
+                <Label htmlFor="password">
+                  {technician ? "New password (optional)" : "Password *"}
+                </Label>
+                <TextInput
+                  id="password"
+                  type="password"
+                  value={formData.password}
+                  onChange={(e) =>
+                    setFormData({ ...formData, password: e.target.value })
+                  }
+                  placeholder={
+                    technician
+                      ? "Leave blank to keep current"
+                      : "Set login password"
+                  }
+                  required={!technician}
+                  minLength={technician ? undefined : 6}
+                />
+                {technician && formData.password && (
+                  <p className="text-xs text-gray-500 mt-1">
+                    Minimum 6 characters to update
+                  </p>
+                )}
+              </div>
 
             </div>
           </div>
