@@ -216,14 +216,16 @@ function ServiceRequestForm() {
         if (data.exists && data.customer) {
           // 🔴 customer পাওয়া গেছে → পুরনো logic একই থাকবে
           const c = data.customer;
-          const homeAddress = c.homeAddress || "";
+          const homeAddress = (c.homeAddress || "").trim();
+          const hasSavedAddress = homeAddress.length > 0;
           const parts = homeAddress.split(",");
           const street = parts[0]?.trim() || "";
           const city = parts.slice(1).join(",").trim() || "";
 
           setFoundCustomer(c);
           setShowNewCustomerForm(false);
-          setUseSavedAddress(true);
+          // Use saved address only if customer has one; otherwise require manual entry
+          setUseSavedAddress(hasSavedAddress);
           setSaveAsDefaultAddress(false);
 
           setFormData((prev) => ({
@@ -234,7 +236,7 @@ function ServiceRequestForm() {
             latitude: c.latitude ?? prev.latitude,
             longitude: c.longitude ?? prev.longitude,
           }));
-          setPinPlaced(true);
+          setPinPlaced(hasSavedAddress);
         } else {
           // 🟢 customer নাই → সাথে সাথেই New Customer form দেখাও
           setFoundCustomer(null);
@@ -386,6 +388,17 @@ function ServiceRequestForm() {
       return;
     }
 
+    // Validate address: either use saved (when available) or manual entry
+    const isUsingSavedAddress = Boolean(foundCustomer && useSavedAddress);
+    const finalAddressCheck = isUsingSavedAddress
+      ? (foundCustomer?.homeAddress || "").trim()
+      : buildFullAddress(formData).trim();
+    if (!finalAddressCheck) {
+      setGlobalError(
+        "Address is required. Please enter street address and city, or use customer's saved address."
+      );
+      return;
+    }
 
     setSubmitting(true);
 
